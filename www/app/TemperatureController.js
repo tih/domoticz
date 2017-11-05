@@ -544,7 +544,6 @@ define(['app'], function (app) {
 				$interval.cancel($scope.mytimer);
 				$scope.mytimer = undefined;
 			}
-			livesocket.Close();
 		});
 
 		ctrl.RoomPlans = [{ idx: 0, name: $.t("All") }];
