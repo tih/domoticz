@@ -667,10 +667,10 @@ bool MainWorker::AddHardwareFromParams(
 	case HTYPE_RFXtrx315:
 	case HTYPE_RFXtrx433:
 	case HTYPE_RFXtrx868:
-		pHardware = new RFXComSerial(ID, SerialPort, 38400, Extra);
+		pHardware = new RFXComSerial(ID, SerialPort, 38400, (CRFXBase::_eRFXAsyncType)atoi(Extra.c_str()));
 		break;
 	case HTYPE_RFXLAN:
-		pHardware = new RFXComTCP(ID, Address, Port, Extra);
+		pHardware = new RFXComTCP(ID, Address, Port, (CRFXBase::_eRFXAsyncType)atoi(Extra.c_str()));
 		break;
 	case HTYPE_P1SmartMeter:
 		pHardware = new P1MeterSerial(ID, SerialPort, (Mode1 == 1) ? 115200 : 9600, (Mode2 != 0), Mode3);
@@ -906,7 +906,6 @@ bool MainWorker::AddHardwareFromParams(
 		pHardware = new I2C(ID, I2C::I2CTYPE_BME280, Address, SerialPort, Mode1);
 		break;
 	case HTYPE_RaspberryMCP23017:
-		_log.Log(LOG_NORM, "MainWorker::AddHardwareFromParams HTYPE_RaspberryMCP23017");
 		pHardware = new I2C(ID, I2C::I2CTYPE_MCP23017, Address, SerialPort, Mode1);
 		break;
 	case HTYPE_Wunderground:
@@ -2586,8 +2585,7 @@ void MainWorker::decode_InterfaceMessage(const int HwdID, const _eHardwareTypes 
 				}
 				if (FWType == FWtypeProXL1)
 				{
-					CRFXBase::_eRFXAsyncType AsyncType = (CRFXBase::_eRFXAsyncType)atoi(pMyHardware->m_sExtraData.c_str());
-					pMyHardware->SetAsyncType(AsyncType);
+					pMyHardware->SetAsyncType(pMyHardware->m_AsyncType);
 				}
 			}
 
@@ -10563,6 +10561,8 @@ void MainWorker::decode_ASyncData(const int HwdID, const _eHardwareTypes HwdType
 	if (
 		(pHardware->m_HwdID == 999)||
 		(pHardware->HwdType == HTYPE_RFXtrx315) ||
+		(pHardware->HwdType == HTYPE_RFXtrx433) ||
+		(pHardware->HwdType == HTYPE_RFXtrx868) ||
 		(pHardware->HwdType == HTYPE_RFXLAN)
 		)
 	{
