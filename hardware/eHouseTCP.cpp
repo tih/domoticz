@@ -550,7 +550,7 @@ bool eHouseTCP::StartHardware()
 
 #endif
 	m_thread = std::make_shared<std::thread>(&eHouseTCP::Do_Work, this);
-	SetThreadName(m_thread->native_handle(), "eHouseTCP");
+	SetThreadNameInt(m_thread->native_handle());
 	m_bIsStarted = true;
 	sOnConnected(this);
 	StartHeartbeatThread();
@@ -602,7 +602,7 @@ int eHouseTCP::ConnectTCP(unsigned int IP)
 		saddr.sin_addr.s_addr = IP;
 	else
 		saddr.sin_addr.s_addr = m_addr.sin_addr.s_addr;
-	saddr.sin_port = htons((u_short)m_EHOUSE_TCP_PORT);
+	saddr.sin_port = htons((uint16_t)m_EHOUSE_TCP_PORT);
 	memset(&server, 0, sizeof(server));               //clear server structure
 	memset(&challange, 0, sizeof(challange));         //clear buffer
 	char line[20];
@@ -617,7 +617,7 @@ int eHouseTCP::ConnectTCP(unsigned int IP)
 	}
 	server.sin_addr.s_addr = m_addr.sin_addr.s_addr;
 	server.sin_family = AF_INET;                    //tcp v4
-	server.sin_port = htons((u_short)m_EHOUSE_TCP_PORT);       //assign eHouse Port
+	server.sin_port = htons((uint16_t)m_EHOUSE_TCP_PORT);       //assign eHouse Port
 	_log.Log(LOG_STATUS, "[TCP Cli Status] Trying Connecting to: %s", line);
 	if (connect(TCPSocket, (struct sockaddr *)&server, sizeof(server)) < 0)
 	{

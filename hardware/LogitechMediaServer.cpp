@@ -119,7 +119,7 @@ bool CLogitechMediaServer::StartHardware()
 
 	//Start worker thread
 	m_thread = std::make_shared<std::thread>(&CLogitechMediaServer::Do_Work, this);
-	SetThreadName(m_thread->native_handle(), "Logitech");
+	SetThreadNameInt(m_thread->native_handle());
 
 	return (m_thread != nullptr);
 }
@@ -502,12 +502,6 @@ void CLogitechMediaServer::SetSettings(const int PollIntervalsec, const int Ping
 		m_iPollInterval = PollIntervalsec;
 	if ((PingTimeoutms / 1000 < m_iPollInterval) && (PingTimeoutms != 0))
 		m_iPingTimeoutms = PingTimeoutms;
-}
-
-void CLogitechMediaServer::Restart()
-{
-	StopHardware();
-	StartHardware();
 }
 
 bool CLogitechMediaServer::WriteToHardware(const char *pdata, const unsigned char length)

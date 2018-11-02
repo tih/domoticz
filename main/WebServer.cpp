@@ -118,6 +118,7 @@ static const _tGuiLanguage guiLanguage[] =
 	{ "sl", "Slovenian" },
 	{ "es", "Spanish" },
 	{ "sv", "Swedish" },
+	{ "zh_TW", "Taiwanese" },
 	{ "tr", "Turkish" },
 	{ "uk", "Ukrainian" },
 	{ NULL, NULL }
@@ -2557,7 +2558,7 @@ namespace http {
 			m_sql.GetPreferencesVar("ReleaseChannel", nValue);
 			bool bIsBetaChannel = (nValue != 0);
 
-			std::string szHistoryURL = "http://www.domoticz.com/download.php?channel=stable&type=history";
+			std::string szHistoryURL = "https://www.domoticz.com/download.php?channel=stable&type=history";
 			if (bIsBetaChannel)
 			{
 				utsname my_uname;
@@ -2575,9 +2576,9 @@ namespace http {
 				}
 
 				if (((machine != "armv6l") && (machine != "armv7l") && (systemname != "windows") && (machine != "x86_64") && (machine != "aarch64")) || (strstr(my_uname.release, "ARCH+") != NULL))
-					szHistoryURL = "http://www.domoticz.com/download.php?channel=beta&type=history";
+					szHistoryURL = "https://www.domoticz.com/download.php?channel=beta&type=history";
 				else
-					szHistoryURL = "http://www.domoticz.com/download.php?channel=beta&type=history&system=" + systemname + "&machine=" + machine;
+					szHistoryURL = "https://www.domoticz.com/download.php?channel=beta&type=history&system=" + systemname + "&machine=" + machine;
 			}
 			if (!HTTPClient::GET(szHistoryURL, historyfile))
 			{
@@ -4521,6 +4522,17 @@ namespace http {
 						devid = id;
 						sunitcode = "0";
 					}
+					else if (lighttype == 307)
+					{
+						//Westinghouse
+						dtype = pTypeFan;
+						subtype = sTypeWestinghouse;
+						std::string id = request::findValue(&req, "id");
+						if (id.empty())
+							return;
+						devid = id;
+						sunitcode = "0";
+					}
 					else if (lighttype == 400) {
 						//Openwebnet Bus Blinds
 						dtype = pTypeGeneralSwitch;
@@ -5120,6 +5132,17 @@ namespace http {
 						//Lucci Air DC
 						dtype = pTypeFan;
 						subtype = sTypeLucciAirDC;
+						std::string id = request::findValue(&req, "id");
+						if (id.empty())
+							return;
+						devid = id;
+						sunitcode = "0";
+					}
+					else if (lighttype == 307)
+					{
+						//Westinghouse
+						dtype = pTypeFan;
+						subtype = sTypeWestinghouse;
 						std::string id = request::findValue(&req, "id");
 						if (id.empty())
 							return;

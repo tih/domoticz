@@ -1075,6 +1075,7 @@ bool MainWorker::AddHardwareFromParams(
 	{
 		pHardware->HwdType = Type;
 		pHardware->m_Name = Name;
+		pHardware->m_ShortName = Hardware_Short_Desc(Type);
 		pHardware->m_DataTimeout = DataTimeout;
 		AddDomoticzHardware(pHardware);
 
@@ -1268,15 +1269,15 @@ bool MainWorker::IsUpdateAvailable(const bool bIsForced)
 	std::string szURL;
 	if (!bIsBetaChannel)
 	{
-		szURL = "http://www.domoticz.com/download.php?channel=stable&type=version&system=" + m_szSystemName + "&machine=" + machine;
-		m_szDomoticzUpdateURL = "http://www.domoticz.com/download.php?channel=stable&type=release&system=" + m_szSystemName + "&machine=" + machine;
-		m_szDomoticzUpdateChecksumURL = "http://www.domoticz.com/download.php?channel=stable&type=checksum&system=" + m_szSystemName + "&machine=" + machine;
+		szURL = "https://www.domoticz.com/download.php?channel=stable&type=version&system=" + m_szSystemName + "&machine=" + machine;
+		m_szDomoticzUpdateURL = "https://www.domoticz.com/download.php?channel=stable&type=release&system=" + m_szSystemName + "&machine=" + machine;
+		m_szDomoticzUpdateChecksumURL = "https://www.domoticz.com/download.php?channel=stable&type=checksum&system=" + m_szSystemName + "&machine=" + machine;
 	}
 	else
 	{
-		szURL = "http://www.domoticz.com/download.php?channel=beta&type=version&system=" + m_szSystemName + "&machine=" + machine;
-		m_szDomoticzUpdateURL = "http://www.domoticz.com/download.php?channel=beta&type=release&system=" + m_szSystemName + "&machine=" + machine;
-		m_szDomoticzUpdateChecksumURL = "http://www.domoticz.com/download.php?channel=beta&type=checksum&system=" + m_szSystemName + "&machine=" + machine;
+		szURL = "https://www.domoticz.com/download.php?channel=beta&type=version&system=" + m_szSystemName + "&machine=" + machine;
+		m_szDomoticzUpdateURL = "https://www.domoticz.com/download.php?channel=beta&type=release&system=" + m_szSystemName + "&machine=" + machine;
+		m_szDomoticzUpdateChecksumURL = "https://www.domoticz.com/download.php?channel=beta&type=checksum&system=" + m_szSystemName + "&machine=" + machine;
 	}
 
 	std::string revfile;
@@ -1305,8 +1306,10 @@ bool MainWorker::IsUpdateAvailable(const bool bIsForced)
 
 bool MainWorker::StartDownloadUpdate()
 {
+#ifndef DEBUG_DOWNLOAD
 #ifdef WIN32
 	return false; //managed by web gui
+#endif
 #endif
 
 	if (!IsUpdateAvailable(true))
@@ -10444,110 +10447,112 @@ void MainWorker::decode_ASyncPort(const int HwdID, const _eHardwareTypes HwdType
 			break;
 		}
 
-		WriteMessage("Baudrate    = ", false);
-		switch (pResponse->ASYNCPORT.baudrate)
+		if (pResponse->ASYNCPORT.cmnd != asyncdisable)
 		{
-		case asyncbaud110:
-			WriteMessage("110");
-			break;
-		case asyncbaud300:
-			WriteMessage("300");
-			break;
-		case asyncbaud600:
-			WriteMessage("600");
-			break;
-		case asyncbaud1200:
-			WriteMessage("1200");
-			break;
-		case asyncbaud2400:
-			WriteMessage("2400");
-			break;
-		case asyncbaud4800:
-			WriteMessage("4800");
-			break;
-		case asyncbaud9600:
-			WriteMessage("9600");
-			break;
-		case asyncbaud14400:
-			WriteMessage("14400");
-			break;
-		case asyncbaud19200:
-			WriteMessage("19200");
-			break;
-		case asyncbaud38400:
-			WriteMessage("38400");
-			break;
-		case asyncbaud57600:
-			WriteMessage("57600");
-			break;
-		case asyncbaud115200:
-			WriteMessage("115200");
-			break;
-		default:
-			sprintf(szTmp, "ERROR: Unknown baudrate type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
-			WriteMessage(szTmp);
-			break;
+			WriteMessage("Baudrate    = ", false);
+			switch (pResponse->ASYNCPORT.baudrate)
+			{
+			case asyncbaud110:
+				WriteMessage("110");
+				break;
+			case asyncbaud300:
+				WriteMessage("300");
+				break;
+			case asyncbaud600:
+				WriteMessage("600");
+				break;
+			case asyncbaud1200:
+				WriteMessage("1200");
+				break;
+			case asyncbaud2400:
+				WriteMessage("2400");
+				break;
+			case asyncbaud4800:
+				WriteMessage("4800");
+				break;
+			case asyncbaud9600:
+				WriteMessage("9600");
+				break;
+			case asyncbaud14400:
+				WriteMessage("14400");
+				break;
+			case asyncbaud19200:
+				WriteMessage("19200");
+				break;
+			case asyncbaud38400:
+				WriteMessage("38400");
+				break;
+			case asyncbaud57600:
+				WriteMessage("57600");
+				break;
+			case asyncbaud115200:
+				WriteMessage("115200");
+				break;
+			default:
+				sprintf(szTmp, "ERROR: Unknown baudrate type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
+				WriteMessage(szTmp);
+				break;
+			}
+			WriteMessage("Parity      = ", false);
+			switch (pResponse->ASYNCPORT.parity)
+			{
+			case asyncParityNo:
+				WriteMessage("None");
+				break;
+			case asyncParityOdd:
+				WriteMessage("Odd");
+				break;
+			case asyncParityEven:
+				WriteMessage("Even");
+				break;
+			default:
+				sprintf(szTmp, "ERROR: Unknown partity type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
+				WriteMessage(szTmp);
+				break;
+			}
+			WriteMessage("Databits    = ", false);
+			switch (pResponse->ASYNCPORT.databits)
+			{
+			case asyncDatabits7:
+				WriteMessage("7");
+				break;
+			case asyncDatabits8:
+				WriteMessage("8");
+				break;
+			default:
+				sprintf(szTmp, "ERROR: Unknown databits type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
+				WriteMessage(szTmp);
+				break;
+			}
+			WriteMessage("Stopbits    = ", false);
+			switch (pResponse->ASYNCPORT.stopbits)
+			{
+			case asyncStopbits1:
+				WriteMessage("1");
+				break;
+			case asyncStopbits2:
+				WriteMessage("2");
+				break;
+			default:
+				sprintf(szTmp, "ERROR: Unknown stopbits type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
+				WriteMessage(szTmp);
+				break;
+			}
+			WriteMessage("Polarity    = ", false);
+			switch (pResponse->ASYNCPORT.polarity)
+			{
+			case asyncPolarityNormal:
+				WriteMessage("Normal");
+				break;
+			case asyncPolarityInvers:
+				WriteMessage("Inverted");
+				break;
+			default:
+				sprintf(szTmp, "ERROR: Unknown stopbits type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
+				WriteMessage(szTmp);
+				break;
+			}
 		}
-		WriteMessage("Parity      = ", false);
-		switch (pResponse->ASYNCPORT.parity)
-		{
-		case asyncParityNo:
-			WriteMessage("None");
-			break;
-		case asyncParityOdd:
-			WriteMessage("Odd");
-			break;
-		case asyncParityEven:
-			WriteMessage("Even");
-			break;
-		default:
-			sprintf(szTmp, "ERROR: Unknown partity type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
-			WriteMessage(szTmp);
-			break;
-		}
-		WriteMessage("Databits    = ", false);
-		switch (pResponse->ASYNCPORT.databits)
-		{
-		case asyncDatabits7:
-			WriteMessage("7");
-			break;
-		case asyncDatabits8:
-			WriteMessage("8");
-			break;
-		default:
-			sprintf(szTmp, "ERROR: Unknown databits type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
-			WriteMessage(szTmp);
-			break;
-		}
-		WriteMessage("Stopbits    = ", false);
-		switch (pResponse->ASYNCPORT.stopbits)
-		{
-		case asyncStopbits1:
-			WriteMessage("1");
-			break;
-		case asyncStopbits2:
-			WriteMessage("2");
-			break;
-		default:
-			sprintf(szTmp, "ERROR: Unknown stopbits type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
-			WriteMessage(szTmp);
-			break;
-		}
-		WriteMessage("Polarity    = ", false);
-		switch (pResponse->ASYNCPORT.polarity)
-		{
-		case asyncPolarityNormal:
-			WriteMessage("Normal");
-			break;
-		case asyncPolarityInvers:
-			WriteMessage("Inverted");
-			break;
-		default:
-			sprintf(szTmp, "ERROR: Unknown stopbits type for Packet type= %02X:%02X", pResponse->ASYNCPORT.packettype, pResponse->ASYNCPORT.subtype);
-			WriteMessage(szTmp);
-			break;
-		}
-
 		WriteMessageEnd();
 	}
 }
@@ -13188,7 +13193,7 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string &DeviceID,
 			{
 				float temp = static_cast<float>(atof(sValue.c_str()));
 				temp += AddjValue;
-				sprintf(szTmp, "%.1f", temp);
+				sprintf(szTmp, "%.2f", temp);
 				sValue = szTmp;
 			}
 			else if (devType == pTypeTEMP_HUM)
@@ -13198,7 +13203,7 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string &DeviceID,
 				{
 					float temp = static_cast<float>(atof(strarray[0].c_str()));
 					temp += AddjValue;
-					sprintf(szTmp, "%.1f;%s;%s", temp, strarray[1].c_str(), strarray[2].c_str());
+					sprintf(szTmp, "%.2f;%s;%s", temp, strarray[1].c_str(), strarray[2].c_str());
 					sValue = szTmp;
 				}
 			}
@@ -13218,11 +13223,11 @@ bool MainWorker::UpdateDevice(const int HardwareID, const std::string &DeviceID,
 
 					if (subType == sTypeTHBFloat)
 					{
-						sprintf(szTmp, "%.1f;%s;%s;%.1f;%s", temp, strarray[1].c_str(), strarray[2].c_str(), fbarometer, strarray[4].c_str());
+						sprintf(szTmp, "%.2f;%s;%s;%.1f;%s", temp, strarray[1].c_str(), strarray[2].c_str(), fbarometer, strarray[4].c_str());
 					}
 					else
 					{
-						sprintf(szTmp, "%.1f;%s;%s;%d;%s", temp, strarray[1].c_str(), strarray[2].c_str(), (int)rint(fbarometer), strarray[4].c_str());
+						sprintf(szTmp, "%.2f;%s;%s;%d;%s", temp, strarray[1].c_str(), strarray[2].c_str(), (int)rint(fbarometer), strarray[4].c_str());
 					}
 					sValue = szTmp;
 				}
