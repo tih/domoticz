@@ -188,6 +188,19 @@ local testLux = function(name)
 	return res
 end
 
+
+local testManagedCounter = function(name)
+	local dev = dz.devices(name)
+	local res = true
+	res = res and checkAttributes(dev, {
+		["counter"] = 1.234;
+		["counterToday"] = 0;
+	})
+	tstMsg('Test managed counter', res)
+	return res
+end
+
+
 local testP1SmartMeter = function(name)
 	local dev = dz.devices(name)
 	local res = true
@@ -661,6 +674,15 @@ local testHTTPSwitch = function(name)
 	return res
 end
 
+local testVersion = function(name)
+	local res = true
+	local utils = require('Utils')
+	res = res and expectEql(utils.DZVERSION , dz.settings.dzVentsVersion)
+	tstMsg('Test version strings to equal (' .. utils.DZVERSION .. ') and (' ..  dz.settings.dzVentsVersion .. ')',res)
+	return res
+end
+
+
 return {
 	active = true,
 	on = {
@@ -721,6 +743,7 @@ return {
 		res = res and testAmpere3('vdAmpere3')
 		res = res and testDimmer('vdSwitchDimmer')
 		res = res and testAPITemperature('vdAPITemperature')
+		res = res and testManagedCounter('vdManagedCounter');
 
 		res = res and testCancelledRepeatSwitch('vdCancelledRepeatSwitch')
 		res = res and testLastUpdates(stage2Trigger)
@@ -729,6 +752,7 @@ return {
 		res = res and testVarCancelled('varCancelled')
 		res = res and testCancelledScene('scCancelledScene')
 		res = res and testHTTPSwitch('vdHTTPSwitch');
+		res = res and testVersion('version')
 
 		-- test a require
 		local m = require('some_module')
@@ -736,7 +760,6 @@ return {
 		if (output ~= 'Rocks!') then
 			err('Module some_module did not load and run properly')
 		end
-
 		res = res and (output == 'Rocks!')
 
 		if (not res) then
