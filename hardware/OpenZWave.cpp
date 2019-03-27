@@ -2265,7 +2265,7 @@ void COpenZWave::AddValue(const OpenZWave::ValueID &vID, const NodeInfo *pNodeIn
 	}
 	else if (commandclass == COMMAND_CLASS_CENTRAL_SCENE)
 	{
-		if (vLabel == "Scene ID")
+		if (vLabel == "Scene Number")
 		{
 			if (vType == OpenZWave::ValueID::ValueType_Byte)
 			{
@@ -2518,7 +2518,7 @@ void COpenZWave::UpdateValue(const OpenZWave::ValueID &vID)
 
 	if (commandclass == COMMAND_CLASS_CENTRAL_SCENE)
 	{
-		if (vLabel != "Scene ID")
+		if (vLabel != "Scene Number")
 		{
 			return;
 		}
