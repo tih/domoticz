@@ -7749,6 +7749,9 @@ namespace http {
 				m_mainworker.m_eventsystem.SetEnabled(m_sql.m_bEnableEventSystem);
 				m_mainworker.m_eventsystem.StartEventSystem();
 			}
+			std::string EnableEventSystemFullURLLog = request::findValue(&req, "EventSystemLogFullURL");
+			m_sql.m_bEnableEventSystemFullURLLog = EnableEventSystemFullURLLog == "on" ? true : false;
+			m_sql.UpdatePreferencesVar("EventSystemLogFullURL", (int)m_sql.m_bEnableEventSystemFullURLLog);
 
 			rnOldvalue = 0;
 			m_sql.GetPreferencesVar("DisableDzVentsSystem", rnOldvalue);
@@ -8162,7 +8165,7 @@ namespace http {
 				}
 			}
 
-			char szData[250];
+			char szData[320];
 			if (totUserDevices == 0)
 			{
 				//All
@@ -9502,7 +9505,7 @@ namespace http {
 							if (dSubType == sTypeRAINWU || dSubType == sTypeRAINByRate)
 							{
 								result2 = m_sql.safe_query(
-									"SELECT Total, Total FROM Rain WHERE (DeviceRowID='%q' AND Date>='%q') ORDER BY ROWID DESC LIMIT 1", sd[0].c_str(), szDate);
+									"SELECT Total, Rate FROM Rain WHERE (DeviceRowID='%q' AND Date>='%q') ORDER BY ROWID DESC LIMIT 1", sd[0].c_str(), szDate);
 							}
 							else
 							{
@@ -9518,7 +9521,7 @@ namespace http {
 
 								if (dSubType == sTypeRAINWU || dSubType == sTypeRAINByRate)
 								{
-									total_real = atof(sd2[1].c_str());
+									total_real = atof(sd2[0].c_str());
 								}
 								else
 								{
@@ -9530,7 +9533,7 @@ namespace http {
 								total_real *= AddjMulti;
 								if (dSubType == sTypeRAINByRate)
 								{
-									rate = (static_cast<float>(atof(strarray[0].c_str())) / 10000.0f)*float(AddjMulti);
+									rate = static_cast<float>(atof(sd2[1].c_str()) / 10000.0f);
 								}
 								else
 								{
@@ -12843,6 +12846,10 @@ namespace http {
 				else if (Key == "EnableEventScriptSystem")
 				{
 					root["EnableEventScriptSystem"] = nValue;
+				}
+				else if (Key == "EventSystemLogFullURL")
+				{
+					root["EventSystemLogFullURL"] = nValue;
 				}
 				else if (Key == "DisableDzVentsSystem")
 				{
