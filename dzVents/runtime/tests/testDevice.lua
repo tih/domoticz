@@ -59,7 +59,8 @@ local function getDevice_(
 		hardwareTypeValue = 'ht1'
 	end
 
-	local data = {
+	local data = 
+	{
 		["id"] = 1,
 		["name"] = name,
 		["description"] = "Description 1",
@@ -73,13 +74,13 @@ local function getDevice_(
 		["switchTypeValue"] = 2,
 		["lastUpdate"] = "2016-03-20 12:23:00",
 		["data"] = {
-			["_state"] = state,
-			["hardwareName"] = "hw1",
-			["hardwareType"] = hardwareType,
-			["hardwareTypeValue"] = hardwaryTypeValue,
-			["hardwareID"] = 1,
-			['_nValue'] = 123,
-			['unit'] = 1
+		["_state"] = state,
+		["hardwareName"] = "hw1",
+		["hardwareType"] = hardwareType,
+		["hardwareTypeValue"] = hardwaryTypeValue,
+		["hardwareID"] = 1,
+		['_nValue'] = 123,
+		['unit'] = 1
 		},
 		["rawData"] = rawData,
 		["baseType"] = baseType ~= nil and baseType or "device",
@@ -512,19 +513,12 @@ describe('device', function()
 			})
 
 			device.disarm().afterSec(2)
-
 			assert.is_same({ { ['myDevice'] = 'Disarm AFTER 2 SECONDS' } }, commandArray)
-
 			commandArray = {}
-
 			device.armAway().afterSec(3)
-
 			assert.is_same({ { ['myDevice'] = 'Arm Away AFTER 3 SECONDS' } }, commandArray)
-
 			commandArray = {}
-
 			device.armHome().afterSec(4)
-
 			assert.is_same({ { ['myDevice'] = 'Arm Home AFTER 4 SECONDS' } }, commandArray)
 		end)
 
@@ -555,6 +549,7 @@ describe('device', function()
 					"disarm",
 					"getColor",
 					'increaseBrightness',
+					'incrementCounter',
 					"kodiExecuteAddOn",
 					"kodiPause",
 					"kodiPlay",
@@ -568,6 +563,8 @@ describe('device', function()
 					"pause",
 					"play",
 					"playFavorites",
+					"quietOff",
+					"quietOn",
 					"setColor",
 					"setColorBrightness",
 					-- "setDescription",
@@ -576,6 +573,7 @@ describe('device', function()
 					"setHotWater",
 					"setHue",
 					"setKelvin",
+					"setMode",
 					'setNightMode',
 					'setRGB',
 					"setVolume",
@@ -656,14 +654,14 @@ describe('device', function()
 								[2] = "On";
 								[3] = "TemporaryOverride";
 								[4] = "2016-04-29T06:32:58Z" }
-							   })
-			
+								})
+
 			local res;
 
 			domoticz.openURL = function(url)
 				res = url;
 			end
-			
+
 			assert.is_same('On', device.state)
 			assert.is_same('TemporaryOverride', device.mode)
 			assert.is_same('2016-04-29T06:32:58Z', device.untilDate)
@@ -671,6 +669,33 @@ describe('device', function()
 			device.setHotWater('Off', 'Permanent')
 
 			assert.is_same('http://127.0.0.1:8080/json.htm?type=setused&idx=1&setpoint=&state=Off&mode=Permanent&used=true', res)
+		end)
+
+		it('should detect an evohome Heating device', function()
+
+			local device = getDevice(domoticz, {
+				['name'] = 'myDevice',
+				['type'] = 'Heating',
+				['subType'] = 'Evohome',
+				['hardwareTypeValue'] = 39,
+				['rawData'] = { [2] = "On";
+								[3] = "TemporaryOverride";
+								[4] = "2016-04-29T06:32:58Z" }
+				})
+
+			local res;
+
+			domoticz.openURL = function(url)
+				res = url;
+			end
+
+			assert.is_same('On', device.state)
+			assert.is_same('TemporaryOverride', device.mode)
+			assert.is_same('2016-04-29T06:32:58Z', device.untilDate)
+
+			device.setMode('Busted')
+
+			assert.is_same('http://127.0.0.1:8080/json.htm?type=command&param=switchmodal&idx=1&status=Busted&action=1&ooc=0', res)
 		end)
 
 		it('should detect an opentherm gateway device', function()
@@ -860,8 +885,16 @@ describe('device', function()
 			assert.is_same(123.44, device.counterToday)
 			assert.is_same(6.7894, device.counter)
 
+			domoticz.openURL = function(url)
+				res = url;
+			end
+
 			device.updateCounter(555)
 			assert.is_same({ { ["UpdateDevice"] = {idx=1, nValue=0, sValue="555", _trigger=true} } }, commandArray)
+		  
+			local domoticz = require('Domoticz')
+			device.incrementCounter(10)
+			assert.is_same('http://127.0.0.1:8080/json.htm?type=command&param=udevice&idx=1&svalue=10', res)
 		end)
 
 		it('should detect a pressure device', function()
@@ -1111,6 +1144,18 @@ describe('device', function()
 				assert.is_same({ { ["s1"] = "On" } }, commandArray)
 			end)
 
+			it('should open Blinds', function()
+				switch.switchType = "Blinds"
+				switch.open()
+				assert.is_same({ { ["s1"] = "Off" } }, commandArray)
+			end)
+
+			it('should close"Venetian Blinds EU', function()
+				switch.switchType = "Venetian Blinds EU"
+				switch.close()
+				assert.is_same({ { ["s1"] = "On" } }, commandArray)
+			end)
+
 			it('should close', function()
 				switch.close()
 				assert.is_same({ { ["s1"] = "Off" } }, commandArray)
@@ -1126,9 +1171,44 @@ describe('device', function()
 				assert.is_same({ { ["s1"] = "Set Level 50" } }, commandArray)
 			end)
 
-			it('should switch a selector', function()
-				switch.switchSelector(15)
-				assert.is_same({ {["s1"]="Set Level 15"}}, commandArray)
+			it('should switch a selector with numeric level', function()
+				local switch = getDevice(domoticz, {
+					['type'] = 'Light/Switch',
+					['name'] = 's1',
+					['additionalRootData'] = { ['switchType'] = 'Selector'},
+					['additionalDataData'] = 
+					{ levelNames = "Off|bb|cc|dd|ee|ff|gg|hh|ii|jj|kk|ll|mm|nn|oo|pp|qq|rr|ss|tt" },
+				})
+
+				commandArray = {} ;switch.switchSelector(0)
+					assert.is_same({ {["s1"]="Set Level 0"}}, commandArray)
+				commandArray = {} ;switch.switchSelector(20)
+					assert.is_same({ {["s1"]="Set Level 20"}}, commandArray)
+				commandArray = {} ;switch.switchSelector(112)
+					assert.is_same({ {["s1"]="Set Level 110"}}, commandArray)
+				commandArray = {} ;switch.switchSelector(500)
+					assert.is_same({ {["s1"]="Set Level 190"}}, commandArray)
+				commandArray = {} ;switch.switchSelector(-10.5)
+					assert.is_same({ {["s1"]="Set Level 0"}}, commandArray)
+				
+			end)
+
+			it('should switch a selector with levelname', function()
+				local switch = getDevice(domoticz, {
+					['type'] = 'Light/Switch',
+					['name'] = 's1',
+					['additionalRootData'] = { ['switchType'] = 'Selector'},
+					['additionalDataData'] = 
+					{ levelNames = "Off|bb|cc|dd|ee|ff|gg|hh|ii|jj|kk|ll|mm|nn|oo|pp|qq|rr|ss|tt" },
+				})
+				commandArray = {} ;switch.switchSelector('bb')
+					assert.is_same({ {["s1"]="Set Level 10"}}, commandArray)
+				commandArray = {} ;switch.switchSelector('bb')
+					assert.is_same({ {["s1"]="Set Level 10"}}, commandArray)
+				commandArray = {} ;switch.switchSelector('Off')
+					assert.is_same({ {["s1"]="Set Level 0"}}, commandArray)
+				commandArray = {} ;switch.switchSelector('zzz')
+					assert.is_same( {}, commandArray)
 			end)
 
 			it('should detect a selector', function()
@@ -1266,18 +1346,45 @@ describe('device', function()
 			} }, commandArray)
 		end)
 
+		describe('Quiet device ( quietOn and quietOff', function()
+	
+			local commandArray = {}
+			domoticz.openURL = function(url)
+				return table.insert(commandArray, url)
+			end
+			
+			local device = getDevice(domoticz, {
+				['name'] = 'quietDevice',
+				['state'] = 'On',
+					  ['type'] = 'Light/Switch',
+				['subType'] = 'RGBWW',
+				['type'] = 'Color Switch'
+			})
+
+			it('should handle the quietOn method correctly )', function()
+				commandArray = {}
+				device.quietOn()
+				assert.is_same({ 'http://127.0.0.1:8080/json.htm?type=command&param=udevice&nvalue=1&svalue=1&idx=1' }, commandArray)
+			end)
+
+			it('should handle the quietOff method correctly', function()
+				commandArray = {}
+				device.quietOff()
+				assert.is_same({ 'http://127.0.0.1:8080/json.htm?type=command&param=udevice&nvalue=0&svalue=0&idx=1' }, commandArray)
+			end)
+		end)
 
 		describe('RGBW device #RGB', function()
 
 			local commandArray = {}
-			local utils = require('Utils')
+			-- local utils = require('Utils')
 			domoticz.utils  = utils
 
 			domoticz.openURL = function(url)
 				return table.insert(commandArray, url)
 			end
 
-			domoticz.log    = function()
+			domoticz.log	= function()
 				return
 			end
 
@@ -1378,7 +1485,7 @@ describe('device', function()
 					['state'] = 'Set To White',
 					['type'] = 'Color Switch',
 				})
-			   assert.is_true(device.active)
+				assert.is_true(device.active)
 			end)
 
 			it('should handle getDevice with subtype RGBWW with state NightMode correctly',function()
@@ -1400,6 +1507,10 @@ describe('device', function()
 				})
 			end)
 		end)
+
+
+
+
 
 		describe('Kodi', function()
 

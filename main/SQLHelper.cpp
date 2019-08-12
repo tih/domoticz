@@ -34,7 +34,7 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
-#define DB_VERSION 134
+#define DB_VERSION 135
 
 extern http::server::CWebServerHelper m_webservers;
 extern std::string szWWWFolder;
@@ -2605,6 +2605,20 @@ bool CSQLHelper::OpenDatabase()
 			query("INSERT INTO Hardware(ID, Name, Enabled, Type, Address, Port, SerialPort, Username, Password, Extra, Mode1, Mode2, Mode3, Mode4, Mode5, Mode6, DataTimeout) SELECT ID, Name, Enabled, Type, Address, Port, SerialPort, Username, Password, Extra, Mode1, Mode2, Mode3, Mode4, Mode5, Mode6, DataTimeout FROM tmp_Hardware;");
 			query("DROP TABLE tmp_Hardware;");
 		}
+		if (dbversion < 135)
+		{
+			//OpenZWave COMMAND_CLASS_METER new index, need to delete the cache!
+			std::vector<std::string> root_files_;
+			DirectoryListing(root_files_, szUserDataFolder + "Config", false, true);
+			for (auto itt : root_files_)
+			{
+				if (itt.find("ozwcache_0x") != std::string::npos)
+				{
+					std::string dfile = szUserDataFolder + "Config/" + itt;
+					std::remove(dfile.c_str());
+				}
+			}
+		}
 	}
 	else if (bNewInstall)
 	{
@@ -4575,7 +4589,7 @@ uint64_t CSQLHelper::UpdateValueInt(const int HardwareID, const char* ID, const 
 					/* Smoke detectors are manually reset!
 									else if (
 										(devType==pTypeSecurity1)&&
-										((subType==sTypeKD101)||(subType==sTypeSA30))
+										((subType==sTypeKD101)||(subType==sTypeSA30)||(subType==sTypeRM174RF))
 										)
 									{
 										cmd=sStatusPanicOff;
@@ -7462,11 +7476,11 @@ bool CSQLHelper::HandleOnOffAction(const bool bIsOn, const std::string &OnAction
 		if (OnAction.empty())
 			return true;
 
-		if ((OnAction.find("http://") != std::string::npos) || (OnAction.find("https://") != std::string::npos))
+		if ((OnAction.find("http://") == 0) || (OnAction.find("https://") == 0))
 		{
 			AddTaskItem(_tTaskItem::GetHTTPPage(0.2f, OnAction, "SwitchActionOn"));
 		}
-		else if (OnAction.find("script://") != std::string::npos)
+		else if (OnAction.find("script://") == 0)
 		{
 			//Execute possible script
 			if (OnAction.find("../") != std::string::npos)
@@ -7502,11 +7516,11 @@ bool CSQLHelper::HandleOnOffAction(const bool bIsOn, const std::string &OnAction
 	if (OffAction.empty())
 		return true;
 
-	if ((OffAction.find("http://") != std::string::npos) || (OffAction.find("https://") != std::string::npos))
+	if ((OffAction.find("http://") == 0) || (OffAction.find("https://") == 0))
 	{
 		AddTaskItem(_tTaskItem::GetHTTPPage(0.2f, OffAction, "SwitchActionOff"));
 	}
-	else if (OffAction.find("script://") != std::string::npos)
+	else if (OffAction.find("script://") == 0)
 	{
 		//Execute possible script
 		if (OffAction.find("../") != std::string::npos)

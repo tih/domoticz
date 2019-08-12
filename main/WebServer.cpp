@@ -633,6 +633,7 @@ namespace http {
 			RegisterCommandCode("zwavecancel", boost::bind(&CWebServer::Cmd_ZWaveCancel, this, _1, _2, _3));
 			RegisterCommandCode("applyzwavenodeconfig", boost::bind(&CWebServer::Cmd_ApplyZWaveNodeConfig, this, _1, _2, _3));
 			RegisterCommandCode("requestzwavenodeconfig", boost::bind(&CWebServer::Cmd_ZWaveRequestNodeConfig, this, _1, _2, _3));
+			RegisterCommandCode("requestzwavenodeinfo", boost::bind(&CWebServer::Cmd_ZWaveRequestNodeInfo, this, _1, _2, _3));
 			RegisterCommandCode("zwavestatecheck", boost::bind(&CWebServer::Cmd_ZWaveStateCheck, this, _1, _2, _3));
 			RegisterCommandCode("zwavereceiveconfigurationfromothercontroller", boost::bind(&CWebServer::Cmd_ZWaveReceiveConfigurationFromOtherController, this, _1, _2, _3));
 			RegisterCommandCode("zwavesendconfigurationtosecondcontroller", boost::bind(&CWebServer::Cmd_ZWaveSendConfigurationToSecondaryController, this, _1, _2, _3));
@@ -1878,27 +1879,54 @@ namespace http {
 			if (session.rights != 2)
 			{
 				session.reply_status = reply::forbidden;
+				_log.Log(LOG_ERROR, "User: %s tried to add a uservariable!", session.username.c_str());
 				return; //Only admin user allowed
 			}
 			std::string variablename = request::findValue(&req, "vname");
 			std::string variablevalue = request::findValue(&req, "vvalue");
 			std::string variabletype = request::findValue(&req, "vtype");
+			
+			root["title"] = "AddUserVariable";
+			root["status"] = "ERR";
+			
+			if (!std::isdigit(variabletype[0])) 
+			{
+				stdlower(variabletype);
+				if (variabletype == "integer")
+					variabletype = "0";
+				else if (variabletype == "float")
+					variabletype = "1";
+				else if (variabletype == "string")
+					variabletype = "2";
+				else if (variabletype == "date")
+					variabletype = "3";
+				else if (variabletype == "time")
+					variabletype = "4";
+				else
+				{
+					root["message"] = "Invalid variabletype " + variabletype;
+					return;
+				}
+			}
+			
 			if (
 				(variablename.empty()) ||
 				(variabletype.empty()) ||
+				((variabletype != "0") && (variabletype != "1") && (variabletype != "2") && (variabletype != "3") && (variabletype != "4")) || 
 				((variablevalue.empty()) && (variabletype != "2"))
 				)
+			{
+				root["message"] = "Invalid variabletype " + variabletype;
 				return;
-
-			root["title"] = "AddUserVariable";
+			}
 
 			std::string errorMessage;
 			if (!m_sql.AddUserVariable(variablename, (const _eUsrVariableType)atoi(variabletype.c_str()), variablevalue, errorMessage))
 			{
-				root["status"] = "ERR";
 				root["message"] = errorMessage;
 			}
-			else {
+			else 
+			{
 				root["status"] = "OK";
 			}
 		}
@@ -1907,6 +1935,7 @@ namespace http {
 		{
 			if (session.rights != 2)
 			{
+				_log.Log(LOG_ERROR, "User: %s tried to delete a uservariable!", session.username.c_str());
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
@@ -1923,34 +1952,68 @@ namespace http {
 		{
 			if (session.rights != 2)
 			{
+				_log.Log(LOG_ERROR, "User: %s tried to update a uservariable!", session.username.c_str());
 				session.reply_status = reply::forbidden;
 				return; //Only admin user allowed
 			}
-
+			
 			std::string idx = request::findValue(&req, "idx");
 			std::string variablename = request::findValue(&req, "vname");
 			std::string variablevalue = request::findValue(&req, "vvalue");
 			std::string variabletype = request::findValue(&req, "vtype");
-
+			
+			root["title"] = "UpdateUserVariable";
+			root["status"] = "ERR";
+			
+			if (!std::isdigit(variabletype[0])) 
+			{
+				stdlower(variabletype);
+				if (variabletype == "integer")
+					variabletype = "0";
+				else if (variabletype == "float")
+					variabletype = "1";
+				else if (variabletype == "string")
+					variabletype = "2";
+				else if (variabletype == "date")
+					variabletype = "3";
+				else if (variabletype == "time")
+					variabletype = "4";
+				else
+				{
+					root["message"] = "Invalid variabletype " + variabletype;
+					return;
+				}
+			}
+			
 			if (
 				(variablename.empty()) ||
 				(variabletype.empty()) ||
+				((variabletype != "0") && (variabletype != "1") && (variabletype != "2") && (variabletype != "3") && (variabletype != "4")) || 
 				((variablevalue.empty()) && (variabletype != "2"))
 				)
+			{
+				root["message"] = "Invalid variabletype " + variabletype;
 				return;
+			}
 
 			std::vector<std::vector<std::string> > result;
 			if (idx.empty())
 			{
 				result = m_sql.safe_query("SELECT ID FROM UserVariables WHERE Name='%q'", variablename.c_str());
 				if (result.empty())
+				{
+					root["message"] = "Uservariable " + variablename + " does not exist";
 					return;
+				}
 				idx = result[0][0];
 			}
 
 			result = m_sql.safe_query("SELECT Name, ValueType FROM UserVariables WHERE ID='%q'", idx.c_str());
 			if (result.empty())
+			{
+				root["message"] = "Uservariable " + variablename + " does not exist";
 				return;
+			}
 
 			bool bTypeNameChanged = false;
 			if (variablename != result[0][0])
@@ -1958,12 +2021,9 @@ namespace http {
 			else if (variabletype != result[0][1])
 				bTypeNameChanged = true; //new type
 
-			root["title"] = "UpdateUserVariable";
-
 			std::string errorMessage;
 			if (!m_sql.UpdateUserVariable(idx, variablename, (const _eUsrVariableType)atoi(variabletype.c_str()), variablevalue, !bTypeNameChanged, errorMessage))
 			{
-				root["status"] = "ERR";
 				root["message"] = errorMessage;
 			}
 			else {
@@ -8112,6 +8172,7 @@ namespace http {
 							{
 								root["result"][ii]["Type"] = "Scene";
 								root["result"][ii]["TypeImg"] = "scene";
+								root["result"][ii]["Image"] = "Push";
 							}
 							else
 							{
@@ -9103,7 +9164,12 @@ namespace http {
 						root["result"][ii]["StrParam2"] = strParam2;
 						root["result"][ii]["Protected"] = (iProtected != 0);
 
-						if ((dSubType == sTypeKD101) || (dSubType == sTypeSA30) || (switchtype == STYPE_SMOKEDETECTOR))
+						if (
+							(dSubType == sTypeKD101)
+							|| (dSubType == sTypeSA30)
+							|| (dSubType == sTypeRM174RF)
+							|| (switchtype == STYPE_SMOKEDETECTOR)
+							)
 						{
 							root["result"][ii]["SwitchTypeVal"] = STYPE_SMOKEDETECTOR;
 							root["result"][ii]["TypeImg"] = "smoke";
@@ -10331,12 +10397,12 @@ namespace http {
 							float vis = static_cast<float>(atof(sValue.c_str()));
 							if (metertype == 0)
 							{
-								//km
+								//Metric
 								sprintf(szTmp, "%.1f cm", vis);
 							}
 							else
 							{
-								//miles
+								//Imperial
 								sprintf(szTmp, "%.1f in", vis*0.6214f);
 							}
 							root["result"][ii]["Data"] = szTmp;
@@ -10632,6 +10698,7 @@ namespace http {
 						sprintf(szTmp, "%g %s", m_sql.m_weightscale * atof(sValue.c_str()), m_sql.m_weightsign.c_str());
 						root["result"][ii]["Data"] = szTmp;
 						root["result"][ii]["HaveTimeout"] = false;
+						root["result"][ii]["SwitchTypeVal"] = (m_sql.m_weightsign=="kg") ? 0 : 1;
 					}
 					else if (dType == pTypeUsage)
 					{
@@ -10829,7 +10896,7 @@ namespace http {
 						szAttachmentName = szVar + ".db";
 					}
 				}
-				reply::set_content_from_file(&rep, OutputFileName, szAttachmentName, true);
+				reply::set_download_file(&rep, OutputFileName, szAttachmentName);
 			}
 		}
 

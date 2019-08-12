@@ -20,7 +20,7 @@ struct STR_DEVICE {
 	std::string api_state;
 };
 
-#define TOT_DEVICE_TYPES 8
+#define TOT_DEVICE_TYPES 9
 
 const STR_DEVICE DevicesType[TOT_DEVICE_TYPES] =
 {
@@ -32,6 +32,7 @@ const STR_DEVICE DevicesType[TOT_DEVICE_TYPES] =
 	{ 5, "dimmerBox", "Dimmer Box", pTypeLighting2, sTypeAC, STYPE_Dimmer, "dimmer" },
 	{ 6, "switchBoxD", "Switch Box D", pTypeLighting2, sTypeAC, STYPE_OnOff, "relay" },
 	{ 7, "airSensor", "Air Sensor", pTypeAirQuality, sTypeVoltcraft, 0, "air" },
+	{ 8, "tempSensor", "Temp Sensor", pTypeGeneral, sTypeTemperature, 0, "tempsensor" },
 };
 
 BleBox::BleBox(const int id, const int pollIntervalsec)
@@ -90,7 +91,7 @@ void BleBox::Do_Work()
 			GetDevicesState();
 		}
 	}
-	Log(LOG_STATUS, "Worker started...");
+	Log(LOG_STATUS, "Worker stopped...");
 }
 
 void BleBox::GetDevicesState()
@@ -232,7 +233,43 @@ void BleBox::GetDevicesState()
 						break;
 					uint8_t value = (uint8_t)sensor["value"].asInt();
 					std::string type = sensor["type"].asString();
+
+					//TODO - how save IP address ??
 					SendAirQualitySensor(IP, index + 1, 255, value, type);
+				}
+
+				break;
+			}
+			case 8:
+			{
+				if (DoesNodeExists(root, "tempSensor") == false)
+					break;
+
+				root = root["tempSensor"];
+
+				if ((DoesNodeExists(root, "sensors") == false) || (!root["sensors"].isArray()))
+					break;
+
+				Json::Value sensors = root["sensors"];
+				Json::ArrayIndex count = sensors.size();
+				for (Json::ArrayIndex index = 0; index < count; index++)
+				{
+					Json::Value sensor = sensors[index];
+
+					if ((DoesNodeExists(sensor, "value") == false) || (DoesNodeExists(sensor, "state") == false))
+						break;
+
+					if (sensor["state"] != 2)
+					{
+						Log(LOG_ERROR, "temp sensor error!");
+						break;
+					}
+
+					std::string temperature = sensor["value"].asString(); // xxxx (xx.xx = temperature)
+					float ftemp = static_cast<float>(std::stoi(temperature.substr(0, 2)) + std::stoi(temperature.substr(2, 2)) / 100.0);
+
+					//TODO - how save IP address ??
+					SendTempSensor(IP, 255, ftemp, DevicesType[itt.second].name);
 				}
 
 				break;
@@ -878,7 +915,7 @@ namespace http {
 
 			root["status"] = "OK";
 			root["title"] = "BleBoxAddNode";
-			pHardware->AddNode(name, ip);
+			pHardware->AddNode(name, ip, true);
 		}
 
 		void CWebServer::Cmd_BleBoxRemoveNode(WebEmSession & session, const request & req, Json::Value & root)
@@ -1110,7 +1147,7 @@ int BleBox::GetDeviceType(const std::string & IPAddress)
 	}
 }
 
-void BleBox::AddNode(const std::string & name, const std::string & IPAddress)
+void BleBox::AddNode(const std::string & name, const std::string & IPAddress, bool reloadNodes)
 {
 	std::string deviceApiName = IdentifyDevice(IPAddress);
 	if (deviceApiName.empty())
@@ -1140,7 +1177,11 @@ void BleBox::AddNode(const std::string & name, const std::string & IPAddress)
 		{
 			m_sql.InsertDevice(m_HwdID, szIdx.c_str(), 0, (uint8_t)deviceType.deviceID, deviceType.subType, deviceType.switchType, 0, "Unavailable", name);
 		}
-	ReloadNodes();
+
+	if (reloadNodes)
+	{
+		ReloadNodes();
+	}
 }
 
 void BleBox::RemoveNode(const int id)
@@ -1221,26 +1262,26 @@ void BleBox::SearchNodes(const std::string & ipmask)
 	if (!isInt(strarray[0]) || !isInt(strarray[1]) || !isInt(strarray[2]))
 		return;
 
+	std::vector<std::thread> searchingThreads;
 
-	std::vector< std::shared_ptr<std::thread> > searchingThreads;
+	std::stringstream sstr;
+	sstr << strarray[0] << "." << strarray[1] << "." << strarray[2] << ".";
+	const std::string ipStart = sstr.str();
 
 	for (unsigned int i = 1; i < 255; ++i)
 	{
-		std::stringstream sstr;
-		sstr << strarray[0] << "." << strarray[1] << "." << strarray[2] << "." << i;
-		std::string IPAddress = sstr.str();
+		std::string IPAddress = ipStart + std::to_string(i);
 
-		std::map<const std::string, const int>::const_iterator itt = m_devices.find(IPAddress);
-		if (itt == m_devices.end())
+		if (m_devices.find(IPAddress) == m_devices.end())
 		{
-			auto thread = std::make_shared<std::thread>(&BleBox::AddNode, this, "unknown", IPAddress);
-			SetThreadName(thread->native_handle(), "BleBox_Search");
-			searchingThreads.push_back(thread);
+			searchingThreads.emplace_back(&BleBox::AddNode, this, "unknown", IPAddress, false);
 		}
 	}
 
-	for (size_t i = 1; i <= searchingThreads.size(); ++i)
+	for (auto& thread : searchingThreads)
 	{
-		searchingThreads[i - 1]->join();
+		thread.join();
 	}
+
+	ReloadNodes();
 }

@@ -68,7 +68,7 @@ local testDimmer = function(name)
 	local dev = dz.devices(name)
 	local res = true
 	res = res and checkAttributes(dev, {
-		["id"] = 40,
+		["id"] = 42,
 		["state"] = "On",
 		["lastLevel"] = 75, -- this script is NOT triggered by the dimmer so lastLevel is the current level
 		["level"] = 75;
@@ -115,7 +115,7 @@ local testCounterIncremental = function(name)
 	local dev = dz.devices(name)
 	local res = true
 	res = res and checkAttributes(dev, {
-		["counter"] = 1.234;
+		["counter"] = 1.244;
 		["counterToday"] = 0;
 	})
 	handleResult('Test counter incremental device', res)
@@ -675,12 +675,13 @@ local testLastUpdates = function(stage2Trigger)
 			if (device.name ~= 'endResult' and
 				device.name ~= 'stage1Trigger' and
 				device.name ~= 'vdRepeatSwitch' and
-				device.anme ~= 'vdText' and
+				device.name ~= 'vdText' and
+				device.name ~= 'vdWildcardsSwitch' and
 				device.name ~= 'stage2Trigger') then
 				local delta = stage1SecsAgo - device.lastUpdate.secondsAgo
 
 				-- test if lastUpdate for the device is close to stage1Time
-				local ok = (delta <= 10)
+				local ok = (delta <= 20)
 				acc = acc and ok -- should be significantly less that the time between stage1 and stage2
 				if (not expectEql(true, ok, device.name .. ' lastUpdate is not in the past')) then
 					print('stage1Time:' .. stage1Time.secondsSinceMidnight .. ' device: ' .. device.lastUpdate.secondsSinceMidnight .. ' delta: ' .. delta)
@@ -698,9 +699,17 @@ end
 
 local testVarCancelled = function(name)
 	local res = true
-	local var = dz.variables('varCancelled')
+	local var = dz.variables(name)
 	res = res and expectEql(0, var.value)
-	handleResult('Test cancelled variable', res)
+	handleResult('Test ' .. name .. ' variable', res)
+	return res
+end
+
+local testVarDocumentation = function(name)
+	local res = true
+	local var = dz.variables(name)
+	res = res and expectEql(0, var.value)
+	handleResult('Test ' .. name .. ' variable', res)
 	return res
 end
 
@@ -758,7 +767,6 @@ local testIFTTT = function(event)
 	return res
 end
 
-
 local testCancelledScene = function(name)
 	local res = true
 	local count = dz.globalData.cancelledScene
@@ -784,6 +792,27 @@ local testDescription = function(name, description, type)
 	handleResult('Test description ' .. type ..' device for string: ' .. description, res)
 	return res
 end
+
+local testQuietOn = function(name)
+	local res = true
+	local dev = dz.devices(name)
+	res = res and checkAttributes(dev, {
+		["state"] = "On",
+	})
+	handleResult('Test QuietOn switch device', res)
+	return res
+end
+
+local testQuietOff = function(name)
+	local res = true
+	local dev = dz.devices(name)
+	res = res and checkAttributes(dev, {
+		["state"] = "Off",
+	})
+	handleResult('Test QuietOff switch device', res)
+	return res
+end
+
 
 local testVersion = function(name)
 	local res = true
@@ -831,6 +860,8 @@ return {
 		res = res and testP1SmartMeter('vdP1SmartMeterElectric')
 		res = res and testPercentage('vdPercentage')
 		res = res and testPressureBar('vdPressureBar')
+		res = res and testQuietOff('vdQuietOffSwitch')
+		res = res and testQuietOn('vdQuietOnSwitch')
 		res = res and testRain('vdRain')
 		res = res and testRGB('vdRGBSwitch')
 		res = res and testRGBW('vdRGBWSwitch')
@@ -869,11 +900,12 @@ return {
 		res = res and testLastUpdates(stage2Trigger)
 		res = res and testRepeatSwitch('vdRepeatSwitch')
 		res = res and testVarCancelled('varCancelled')
+		res = res and testVarDocumentation('varUpdateDocument')
 		res = res and testCancelledScene('scCancelledScene')
 		res = res and testHTTPSwitch('vdHTTPSwitch');
 		res = res and testDescription('vdDescriptionSwitch', descriptionString, "device")
 		res = res and testDescription('sceneDescriptionSwitch1', descriptionString, "scene")
-	   	res = res and testDescription('groupDescriptionSwitch1', descriptionString, "group")
+		res = res and testDescription('groupDescriptionSwitch1', descriptionString, "group")
 		res = res and testDeviceDump(vdSwitchDimmer)
 		res = res and testCameraDump()
 		res = res and testSettingsDump()

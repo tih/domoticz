@@ -383,8 +383,19 @@ void MainWorker::RemoveDomoticzHardware(CDomoticzHardwareBase *pHardware)
 
 	if (pOrgHardware == pHardware)
 	{
-		pOrgHardware->Stop();
-		delete pOrgHardware;
+		try
+		{
+			pOrgHardware->Stop();
+			delete pOrgHardware;
+		}
+		catch (std::exception& e)
+		{
+			_log.Log(LOG_ERROR, "Mainworker: Exception: %s (%s:%d)", e.what(), std::string(__func__).substr(std::string(__func__).find_last_of("/\\") + 1).c_str(), __LINE__);
+		}
+		catch (...)
+		{
+			_log.Log(LOG_ERROR, "Mainworker: Exception catched! %s:%d", std::string(__func__).substr(std::string(__func__).find_last_of("/\\") + 1).c_str(), __LINE__);
+		}
 	}
 }
 
@@ -6910,6 +6921,7 @@ void MainWorker::decode_Security1(const int HwdID, const _eHardwareTypes HwdType
 	if (
 		(pResponse->SECURITY1.subtype == sTypeKD101) ||
 		(pResponse->SECURITY1.subtype == sTypeSA30) ||
+		(pResponse->SECURITY1.subtype == sTypeRM174RF) ||
 		(pResponse->SECURITY1.subtype == sTypeDomoticzSecurity)
 		)
 	{
@@ -12946,7 +12958,8 @@ bool MainWorker::SwitchScene(const uint64_t idx, std::string switchcmd)
 				((switchtype == STYPE_Dimmer) ||
 				(switchtype == STYPE_BlindsPercentage) ||
 					(switchtype == STYPE_BlindsPercentageInverted) ||
-					(switchtype == STYPE_Selector)
+					(switchtype == STYPE_Selector) ||
+                    bHaveDimmer
 					) && (maxDimLevel != 0))
 			{
 				if (lstatus == "On")
