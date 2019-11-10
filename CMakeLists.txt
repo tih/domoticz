@@ -315,6 +315,7 @@ main/EventSystem.cpp
 main/EventsPythonModule.cpp
 main/EventsPythonDevice.cpp
 main/Helper.cpp
+main/HTMLSanitizer.cpp
 main/IFTTT.cpp
 main/localtime_r.cpp
 main/Logger.cpp
@@ -350,6 +351,7 @@ hardware/ASyncSerial.cpp
 hardware/ASyncTCP.cpp
 hardware/AtagOne.cpp
 hardware/BleBox.cpp
+hardware/Buienradar.cpp
 hardware/cayenne_lpp/CayenneLPP_Dec.cpp
 hardware/ColorSwitch.cpp
 hardware/Comm5Serial.cpp
@@ -571,6 +573,7 @@ if(NOT OPENSSL_FOUND)
 else()
   message(STATUS "OPENSSL_LIBRARIES: ${OPENSSL_LIBRARIES}")
   add_definitions(-DWWW_ENABLE_SSL)
+  add_definitions(-DWITH_TLS)
   include_directories(${OPENSSL_INCLUDE_DIR})
   target_link_libraries(domoticz ${OPENSSL_LIBRARIES})
 endif()
@@ -647,7 +650,6 @@ IF(CURL_FOUND)
   MESSAGE(STATUS "Curl libraries found at: ${CURL_LIBRARIES}")
   MESSAGE(STATUS "Curl includes found at: ${CURL_INCLUDE_DIRS}")
   INCLUDE_DIRECTORIES(${CURL_INCLUDE_DIRS})
-  # add_definitions(-DWWW_ENABLE_SSL)
 else()
   MESSAGE(FATAL_ERROR "cURL not found on your system, see install.txt how to get them installed. (for example 'sudo apt-get install curl libcurl4-gnutls-dev')")
 ENDIF(CURL_FOUND)
@@ -700,41 +702,6 @@ IF(OpenZWave)
   target_link_libraries(domoticz ${OpenZWave})
   include_directories(${CMAKE_SOURCE_DIR}/hardware/openzwave)
   add_definitions(-DWITH_OPENZWAVE)
-  # open-zwave needs libudev if statically linked
-  IF(USE_STATIC_OPENZWAVE)
-    IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-      set(IOKIT_LIBRARY "-framework IOKit -framework CoreFoundation" CACHE FILEPATH "IOKit framework" FORCE)
-      target_link_libraries(domoticz ${IOKIT_LIBRARY} -lresolv)
-    ELSEIF(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
-      MESSAGE(STATUS "Building on FreeBSD, libudev not needed!")
-      FIND_PATH(ICONV_INCLUDE_DIR iconv.h)
-      FIND_LIBRARY(ICONV_LIBRARIES NAMES iconv libiconv libiconv-2 c)
-      IF(ICONV_INCLUDE_DIR AND ICONV_LIBRARIES)
-        SET(ICONV_FOUND TRUE)
-        #target_link_libraries(domoticz ${ICONV_INCLUDE_DIR})
-        target_link_libraries(domoticz ${ICONV_LIBRARIES} -lrt)
-        message(STATUS ${ICONV_LIBRARIES})
-      ELSE()
-        MESSAGE(FATAL_ERROR "libiconv not found on your system")
-      ENDIF(ICONV_INCLUDE_DIR AND ICONV_LIBRARIES)
-    ELSEIF(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
-      MESSAGE(STATUS "Building on NetBSD, libudev not needed!")
-    ELSE()
-      find_library(UDEV NAMES libudev.a)
-      IF(UDEV)
-        message(STATUS ${UDEV})
-        target_link_libraries(domoticz ${UDEV} -lrt -lresolv)
-      ELSE()
-        find_library(UDEV NAMES libudev.so)
-        IF(UDEV)
-           message(STATUS ${UDEV})
-           target_link_libraries(domoticz ${UDEV} -lrt -lresolv)
-        ELSE()
-           MESSAGE(FATAL_ERROR "LIB UDEV not found on your system, see install.txt how to get them installed.\nsudo apt-get install libudev-dev")
-        ENDIF(UDEV)
-      ENDIF(UDEV)
-    ENDIF()
-  ENDIF(USE_STATIC_OPENZWAVE)
 ELSE()
   MESSAGE(STATUS "==== OpenZWave not found, support disabled!")
 ENDIF(OpenZWave)
@@ -760,12 +727,16 @@ else()
   message(STATUS "Not found telldus-core (telldus-core.h), not adding tellstick support")
 endif (TELLDUSCORE_INCLUDE)
 
+target_link_libraries(domoticz ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${CURL_LIBRARIES} pthread ${LUA_LIBRARIES} ${MQTT_LIBRARIES} ${SQLite_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES})
+
 IF(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  target_link_libraries(domoticz ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${CURL_LIBRARIES} pthread ${LUA_LIBRARIES} ${MQTT_LIBRARIES} ${SQLite_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES})
+  target_link_libraries(domoticz -lresolv)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
-  target_link_libraries(domoticz ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${CURL_LIBRARIES} pthread ${LUA_LIBRARIES} ${MQTT_LIBRARIES} ${SQLite_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES} ${EXECINFO_LIBRARIES})
+  target_link_libraries(domoticz ${EXECINFO_LIBRARIES})
+elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+  target_link_libraries(domoticz ${EXECINFO_LIBRARIES})
 else()
-  target_link_libraries(domoticz -lrt ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${MINIZIP_LIBRARIES} ${CURL_LIBRARIES} pthread ${LUA_LIBRARIES} ${MQTT_LIBRARIES} ${SQLite_LIBRARIES} ${CMAKE_DL_LIBS} ${TELLDUS_LIBRARIES} ${EXECINFO_LIBRARIES})
+  target_link_libraries(domoticz -lrt -lresolv ${EXECINFO_LIBRARIES})
 ENDIF()
 
 ADD_PRECOMPILED_HEADER(domoticz "main/stdafx.h")
