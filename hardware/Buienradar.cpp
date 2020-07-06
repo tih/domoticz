@@ -6,7 +6,7 @@
 #include "hardwaretypes.h"
 #include "../main/localtime_r.h"
 #include "../httpclient/HTTPClient.h"
-#include "../json/json.h"
+#include "../main/json_helper.h"
 #include "../main/RFXtrx.h"
 #include "../main/mainworker.h"
 #include "../main/SQLHelper.h"
@@ -18,7 +18,7 @@
 #define BUIENRADAR_GRAFIEK_URL "https://www.buienradar.nl/nederland/weerbericht/weergrafieken/" //station_id
 //#define BUIENRARA_GRAFIEK_HISTORY_URL "https://graphdata.buienradar.nl/1.0/actualarchive/weatherstation/6370?startDate=2019-09-15"
 
-#define BUIENRADAR_RAIN "https://gadgets.buienradar.nl/data/raintext/?lat=" // + m_szMyLatitude + "&lon=" + m_szMyLongitude;
+#define BUIENRADAR_RAIN "https://gpsgadget.buienradar.nl/data/raintext/?lat=" // + m_szMyLatitude + "&lon=" + m_szMyLongitude;
 
 #define RAINSHOWER_LEADTIME 3
 #define RAINSHOWER_DURATION 4
@@ -157,7 +157,7 @@ void CBuienRadar::Do_Work()
 		}
 		else {
 			// Decrease rainshower every minute (if it is not zer)
-			if ((m_rainShowerLeadTime > 0) and (sec_counter % 60 == 0)) {
+			if ((m_rainShowerLeadTime > 0) && (sec_counter % 60 == 0)) {
 				m_rainShowerLeadTime--;
 				SendCustomSensor(RAINSHOWER_LEADTIME, 1, 255, static_cast<float>(m_rainShowerLeadTime), "Expected Rainshower Leadtime", "minutes");
 			}
@@ -166,14 +166,14 @@ void CBuienRadar::Do_Work()
 	_log.Log(LOG_STATUS, "BuienRadar: Worker stopped...");
 }
 
-bool CBuienRadar::WriteToHardware(const char* pdata, const unsigned char length)
+bool CBuienRadar::WriteToHardware(const char* /*pdata*/, const unsigned char /*length*/)
 {
 	return false;
 }
 
 std::string CBuienRadar::GetForecastURL()
 {
-	std::string szURL = "https://gadgets.buienradar.nl/gadget/forecastandstation/" + std::to_string(m_iNearestStationID);
+	std::string szURL = "https://gpsgadget.buienradar.nl/gadget/forecastandstation/" + std::to_string(m_iNearestStationID);
 	return szURL;
 }
 
@@ -226,8 +226,7 @@ bool CBuienRadar::FindNearestStationID()
 
 	Json::Value root;
 
-	Json::Reader jReader;
-	bool ret = jReader.parse(sResult, root);
+	bool ret = ParseJSon(sResult, root);
 	if ((!ret) || (!root.isObject()))
 	{
 		_log.Log(LOG_ERROR, "BuienRadar: Invalid data received! (Check Station ID!)");
@@ -306,8 +305,7 @@ void CBuienRadar::GetMeterDetails()
 #endif
 	Json::Value root;
 
-	Json::Reader jReader;
-	bool ret = jReader.parse(sResult, root);
+	bool ret = ParseJSon(sResult, root);
 	if ((!ret) || (!root.isObject()))
 	{
 		_log.Log(LOG_ERROR, "BuienRadar: Invalid data received! (Check Station ID!)");
@@ -338,7 +336,7 @@ void CBuienRadar::GetMeterDetails()
 	float temp = -999.9f;
 	int humidity = 0;
 	float barometric = 0;
-	int barometric_forcast = wsbaroforcast_unknown;
+	uint8_t barometric_forecast = wsbaroforecast_unknown;
 
 	if (!root["temperature"].empty())
 	{
@@ -353,19 +351,19 @@ void CBuienRadar::GetMeterDetails()
 		barometric = root["airpressure"].asFloat();
 		if (barometric < 1000)
 		{
-			barometric_forcast = wsbaroforcast_rain;
+			barometric_forecast = wsbaroforecast_rain;
 			if (temp != -999.9f)
 			{
 				if (temp <= 0)
-					barometric_forcast = wsbaroforcast_snow;
+					barometric_forecast = wsbaroforecast_snow;
 			}
 		}
 		else if (barometric < 1020)
-			barometric_forcast = wsbaroforcast_cloudy;
+			barometric_forecast = wsbaroforecast_cloudy;
 		else if (barometric < 1030)
-			barometric_forcast = wsbaroforcast_some_clouds;
+			barometric_forecast = wsbaroforecast_some_clouds;
 		else
-			barometric_forcast = wsbaroforcast_sunny;
+			barometric_forecast = wsbaroforecast_sunny;
 	}
 	if (
 		(temp != -999.9f)
@@ -373,7 +371,7 @@ void CBuienRadar::GetMeterDetails()
 		&& (barometric != 0)
 		)
 	{
-		SendTempHumBaroSensorFloat(1, 255, temp, humidity, barometric, barometric_forcast, "TempHumBaro");
+		SendTempHumBaroSensorFloat(1, 255, temp, humidity, barometric, barometric_forecast, "TempHumBaro");
 	}
 	else if (
 		(temp != -999.9f)
@@ -449,10 +447,19 @@ void CBuienRadar::GetRainPrediction()
 #ifdef DEBUG_BUIENRADARR
 	sResult = ReadFile("E:\\br_rain.txt");
 #else
-	std::string szUrl = BUIENRADAR_RAIN + m_szMyLatitude + "&lon=" + m_szMyLongitude;
-	bool bret = HTTPClient::GET(szUrl, sResult);
-	if (!bret)
+	int totRetry = 0;
+	bool bret = false;
+	while ((!bret) && (totRetry < 2))
 	{
+		std::string szUrl = BUIENRADAR_RAIN + m_szMyLatitude + "&lon=" + m_szMyLongitude;
+		bret = HTTPClient::GET(szUrl, sResult);
+		if (!bret)
+		{
+			totRetry++;
+			sleep_seconds(2);
+		}
+	}
+	if (!bret) {
 		_log.Log(LOG_ERROR, "BuienRadar: Error getting http data! (Check your internet connection!)");
 		return;
 	}
@@ -479,7 +486,7 @@ void CBuienRadar::GetRainPrediction()
 	int total_rain_values_in_duration = 0;
 	double total_rain_next_hour = 0;
 	int total_rain_values_next_hour = 0;
-	int rain_time;
+	int rain_time = 0;
 
 	//values are between 0 (no rain) till 255 (heavy rain)
 	//mm/h = 10^((value -109)/32), 77 = 0.1 mm.h
@@ -496,12 +503,10 @@ void CBuienRadar::GetRainPrediction()
 	else {
 		start_of_rainshower = 0;
 	}
-	float total_rainmmh_in_next_rainshower = 0;
+	double total_rainmmh_in_next_rainshower = 0;
 	int total_rainvalues_in_next_rainshower = 0;
-	float max_rainmmh_in_next_rainshower = 0;
-	float avg_rainmmh_in_next_rainshower = 0;
-
-
+	double max_rainmmh_in_next_rainshower = 0;
+	double avg_rainmmh_in_next_rainshower = 0;
 
 	while (!iStream.eof())
 	{
@@ -568,7 +573,7 @@ void CBuienRadar::GetRainPrediction()
 						}
 					}
 				}
-				else if ((start_of_rainshower == 0) and (rain_value > 0))
+				else if ((start_of_rainshower == 0) && (rain_value > 0))
 				{
 					// Start Of RainShower Detected
 					start_of_rainshower = rain_time;

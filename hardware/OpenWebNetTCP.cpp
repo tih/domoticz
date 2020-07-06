@@ -538,7 +538,7 @@ bool COpenWebNetTCP::ownAuthentication(csocket *connectionSocket)
 		//_log.Log(LOG_STATUS, "COpenWebNetTCP: authentication OK, no password!");
 		return true;
 	}
-	_log.Log(LOG_ERROR, "COpenWebNetTCP: ERROR_FRAME? %d", responseNonce.frame_type);
+	_log.Log(LOG_ERROR, "COpenWebNetTCP: ERROR_FRAME? %d", responseNonce.m_frameType);
 	return false;
 }
 
@@ -807,20 +807,47 @@ void COpenWebNetTCP::UpdateBlinds(const int who, const int where, const int Comm
 	char szIdx[10];
 	sprintf(szIdx, "%07X", NodeID);
 
+	int switch_type;
 	std::vector<std::vector<std::string> > result;
 	result = m_sql.safe_query("SELECT ID,SwitchType FROM DeviceStatus WHERE (HardwareID==%d) AND (DeviceID=='%s') AND (Unit==%d)", m_HwdID, szIdx, iInterface);
 	if (result.empty())
 	{
-		int switch_type = (iLevel < 0) ? STYPE_VenetianBlindsEU : STYPE_BlindsPercentageInverted;
+		switch_type = (iLevel < 0) ? STYPE_VenetianBlindsEU : STYPE_BlindsPercentageInverted;
 		m_sql.InsertDevice(m_HwdID, szIdx, iInterface, pTypeLighting2, sTypeAC, switch_type, 0, "", devname);
 	}
+	else
+		switch_type = atoi(result[0][1].c_str());
+
+	if ((switch_type == STYPE_BlindsPercentageInverted) && (iLevel < 0)) return; // check normal frame received for BlindsPercentageInverted
+
+	int cmd = -1;
+	switch (Command)
+	{
+	case AUTOMATION_WHAT_STOP:			// 0
+	case AUTOMATION_WHAT_STOP_ADVANCED: // 10
+		cmd = gswitch_sStop;
+		break;
+	case AUTOMATION_WHAT_UP:			// 1
+	case AUTOMATION_WHAT_DOWN_ADVANCED: // 12 INVERTED
+		cmd = light2_sOff;
+		break;
+	case AUTOMATION_WHAT_DOWN:			// 2
+	case AUTOMATION_WHAT_UP_ADVANCED:	// 11 INVERTED
+		cmd = light2_sOn;
+		break;
+	default:
+		_log.Log(LOG_ERROR, "COpenWebNetTCP: Command %d invalid!", Command);
+		return;
+	}
+	
+	_log.Log(LOG_ERROR, "COpenWebNetTCP: Command %d, cmd:%d", Command, cmd);
 
 	// if (iLevel < 0)  is a Normal Frame and device is standard
 	// if (iLevel >= 0) is a Meseaure Frame (percentual) and device is Advanced
-	/*TODO: verify level value for Advanced */
 	double level = (iLevel < 0) ? 0. : iLevel;
 	if (level == 100.) level -= 6.25;
-	SendSwitch(NodeID, iInterface, BatteryLevel, (bool)Command, level, devname);
+
+	SendSwitch(NodeID, iInterface, BatteryLevel, (iLevel == 0) ? 0 : 1, level, devname);
 }
 
 
@@ -917,7 +944,7 @@ void COpenWebNetTCP::UpdateDeviceValue(std::vector<bt_openwebnet>::iterator iter
 	case WHO_LIGHTING:									// 1
 		if (!iter->IsNormalFrame())
 		{
-			_log.Log(LOG_ERROR, "COpenWebNetTCP: Who=%s not normal frame! -> frame_type=%d", who.c_str(), iter->frame_type);
+			_log.Log(LOG_ERROR, "COpenWebNetTCP: Who=%s not normal frame! -> frame_type=%d", who.c_str(), iter->m_frameType);
 			return;
 		}
 
@@ -997,22 +1024,6 @@ void COpenWebNetTCP::UpdateDeviceValue(std::vector<bt_openwebnet>::iterator iter
 			if (iAppValue == 1000) // What = 1000 (Command translation)
 				iAppValue = atoi(whatParam[0].c_str());
 
-			switch (iAppValue)
-			{
-			case AUTOMATION_WHAT_STOP:  // 0
-				iAppValue = gswitch_sStop;
-				break;
-			case AUTOMATION_WHAT_UP:    // 1
-				iAppValue = gswitch_sOff;
-				break;
-			case AUTOMATION_WHAT_DOWN:  // 2
-				iAppValue = gswitch_sOn;
-				break;
-			default:
-				_log.Log(LOG_ERROR, "COpenWebNetTCP: Who=%s, What=%s invalid!", who.c_str(), what.c_str());
-				return;
-			}
-
 			iWhere = atoi(where.c_str());
 
 			devname = OPENWEBNET_AUTOMATION;
@@ -1078,7 +1089,7 @@ void COpenWebNetTCP::UpdateDeviceValue(std::vector<bt_openwebnet>::iterator iter
 	case WHO_BURGLAR_ALARM:                         // 5
 		if (!iter->IsNormalFrame())
 		{
-			_log.Log(LOG_ERROR, "COpenWebNetTCP: Who=%s not normal frame! -> frame_type=%d", who.c_str(), iter->frame_type);
+			_log.Log(LOG_ERROR, "COpenWebNetTCP: Who=%s not normal frame! -> frame_type=%d", who.c_str(), iter->m_frameType);
 			return;
 		}
 		
@@ -1217,7 +1228,7 @@ void COpenWebNetTCP::UpdateDeviceValue(std::vector<bt_openwebnet>::iterator iter
 	case WHO_CEN_PLUS_DRY_CONTACT_IR_DETECTION:              // 25
 		if (!iter->IsNormalFrame())
 		{
-			_log.Log(LOG_ERROR, "COpenWebNetTCP: Who=%s not normal frame! -> frame_type=%d", who.c_str(), iter->frame_type);
+			_log.Log(LOG_ERROR, "COpenWebNetTCP: Who=%s not normal frame! -> frame_type=%d", who.c_str(), iter->m_frameType);
 			return;
 		}
 
@@ -1634,8 +1645,8 @@ bool COpenWebNetTCP::sendCommand(bt_openwebnet& command, std::vector<bt_openwebn
 	//_log.Log(LOG_STATUS, "COpenWebNetTCP: Command session connected to: %s:%d", m_szIPAddress.c_str(), m_usIPPort);
 
 	// Command session correctly open -> write command
-	_log.Log(LOG_STATUS, "COpenWebNetTCP: Command %s", command.frame_open.c_str());
-	ownWrite(commandSocket, command.frame_open.c_str(), command.frame_open.length());
+	_log.Log(LOG_STATUS, "COpenWebNetTCP: Command %s", command.m_frameOpen.c_str());
+	ownWrite(commandSocket, command.m_frameOpen.c_str(), command.m_frameOpen.length());
 
 	if (waitForResponse > 0) {
 		sleep_seconds(waitForResponse);
@@ -1643,7 +1654,7 @@ bool COpenWebNetTCP::sendCommand(bt_openwebnet& command, std::vector<bt_openwebn
 		char responseBuffer[OPENWEBNET_BUFFER_SIZE];
 		int read = ownRead(commandSocket, responseBuffer, OPENWEBNET_BUFFER_SIZE);
 		if (!silent) {
-			_log.Log(LOG_STATUS, "COpenWebNetTCP: sent=%s received=%s", command.frame_open.c_str(), responseBuffer);
+			_log.Log(LOG_STATUS, "COpenWebNetTCP: sent=%s received=%s", command.m_frameOpen.c_str(), responseBuffer);
 		}
 
 		std::lock_guard<std::mutex> l(readQueueMutex);
