@@ -26,11 +26,6 @@ CurrentCostMeterSerial::CurrentCostMeterSerial(const int ID, const std::string& 
 	m_HwdID=ID;
 }
 
-CurrentCostMeterSerial::~CurrentCostMeterSerial()
-{
-
-}
-
 bool CurrentCostMeterSerial::StartHardware()
 {
 	RequestStart();
@@ -113,7 +108,7 @@ void CurrentCostMeterSerial::Do_Work()
 
 			sec_counter++;
 			if (sec_counter % 12 == 0) {
-				m_LastHeartbeat=mytime(NULL);
+				m_LastHeartbeat = mytime(nullptr);
 			}
 		}
 	}
@@ -135,7 +130,8 @@ namespace http {
 			}
 
 			std::string idx = request::findValue(&req, "idx");
-			if (idx == "") {
+			if (idx.empty())
+			{
 				return;
 			}
 
@@ -155,5 +151,5 @@ namespace http {
 
 			m_mainworker.RestartHardware(idx);
 		}
-	}
-}
+	} // namespace server
+} // namespace http

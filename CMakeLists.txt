@@ -182,6 +182,7 @@ hardware/1Wire/1WireByKernel.cpp
 hardware/1Wire/1WireCommon.cpp
 hardware/1Wire/1WireForWindows.cpp
 hardware/AccuWeather.cpp
+hardware/AirconWithMe.cpp
 hardware/AnnaThermostat.cpp
 hardware/Arilux.cpp
 hardware/ASyncSerial.cpp
@@ -524,8 +525,10 @@ ENDIF(USE_BUILTIN_JSONCPP)
 IF(USE_BUILTIN_MQTT)
   MESSAGE(STATUS "Using builtin Mosquitto library")
   option(WITH_STATIC_LIBRARIES "Build static versions of the libmosquitto/pp libraries?" ON)
+  option(DOCUMENTATION "Build documentation?" OFF)
   add_subdirectory (extern/mosquitto EXCLUDE_FROM_ALL)
   target_link_libraries(domoticz libmosquitto_static)
+  INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extern/mosquitto/include)
   INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/extern/mosquitto/lib)
 ELSE(USE_BUILTIN_MQTT)
   find_library(MQTT_LIBRARIES NAMES libmosquitto.so)

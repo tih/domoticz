@@ -31,7 +31,7 @@ namespace Plugins {
 	{
 		// If the Python CConnection object reference count ever drops to one the the connection is out of scope so shut it down
 		CConnection*	pConnection = (CConnection*)m_pConnection;
-		CPlugin*		pPlugin = pConnection ? pConnection->pPlugin : NULL;
+		CPlugin *pPlugin = pConnection ? pConnection->pPlugin : nullptr;
 		if (pPlugin && (pPlugin->m_bDebug & PDM_CONNECTION) && m_pConnection && (m_pConnection->ob_refcnt <= 1))
 		{
 			std::string	sTransport = PyUnicode_AsUTF8(pConnection->Transport);
@@ -117,7 +117,7 @@ namespace Plugins {
 		if (!err)
 		{
 			m_bConnected = true;
-			m_tLastSeen = time(0);
+			m_tLastSeen = time(nullptr);
 			m_Socket->async_read_some(boost::asio::buffer(m_Buffer, sizeof m_Buffer),
 				boost::bind(&CPluginTransportTCP::handleRead, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 		}
@@ -168,7 +168,7 @@ namespace Plugins {
 	void CPluginTransportTCP::handleAsyncAccept(boost::asio::ip::tcp::socket* pSocket, const boost::system::error_code& err)
 	{
 		std::lock_guard<std::mutex> l(PythonMutex); // Take mutex to guard access to CPluginTransport::m_pConnection
-		m_tLastSeen = time(0);
+		m_tLastSeen = time(nullptr);
 
 		if (!err)
 		{
@@ -176,7 +176,8 @@ namespace Plugins {
 			std::string sAddress = remote_ep.address().to_string();
 			std::string sPort = std::to_string(remote_ep.port());
 
-			CConnection* pConnection = (CConnection*)CConnection_new(&CConnectionType, (PyObject*)NULL, (PyObject*)NULL);
+			CConnection *pConnection
+				= (CConnection *)CConnection_new(&CConnectionType, (PyObject *)nullptr, (PyObject *)nullptr);
 			CPluginTransportTCP* pTcpTransport = new CPluginTransportTCP(m_HwdID, (PyObject*)pConnection, sAddress, sPort);
 			Py_DECREF(pConnection);
 
@@ -184,7 +185,7 @@ namespace Plugins {
 			pTcpTransport->m_pConnection = (PyObject*)pConnection;
 			pTcpTransport->m_Socket = pSocket;
 			pTcpTransport->m_bConnected = true;
-			pTcpTransport->m_tLastSeen = time(0);
+			pTcpTransport->m_tLastSeen = time(nullptr);
 
 			// Configure Python Connection object
 			pConnection->pTransport = pTcpTransport;
@@ -242,7 +243,7 @@ namespace Plugins {
 		{
 			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, m_Buffer));
 
-			m_tLastSeen = time(0);
+			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
 
 			//ready for next read
@@ -309,7 +310,7 @@ namespace Plugins {
 			_log.Log(LOG_NORM, "(%s) Handling TCP disconnect, socket (%s:%s) is %sconnected", pPlugin->m_Name.c_str(), m_IP.c_str(), m_Port.c_str(), (m_bConnected?"":"not "));
 		}
 
-		m_tLastSeen = time(0);
+		m_tLastSeen = time(nullptr);
 
 		if (m_Socket && m_bConnecting)
 		{
@@ -370,13 +371,13 @@ namespace Plugins {
 		if (m_Acceptor)
 		{
 			delete m_Acceptor;
-			m_Acceptor = NULL;
+			m_Acceptor = nullptr;
 		}
 
 		if (m_Socket)
 		{
 			delete m_Socket;
-			m_Socket = NULL;
+			m_Socket = nullptr;
 		}
 	};
 
@@ -396,7 +397,7 @@ namespace Plugins {
 			SSL_set_tlsext_host_name(m_TLSSock->native_handle(), m_IP.c_str());			// Enable SNI
 
 			m_TLSSock->set_verify_mode(boost::asio::ssl::verify_none);
-			m_TLSSock->set_verify_callback(boost::asio::ssl::rfc2818_verification(m_IP.c_str()));
+			m_TLSSock->set_verify_callback(boost::asio::ssl::rfc2818_verification(m_IP));
 			//m_TLSSock->set_verify_callback(boost::bind(&CPluginTransportTCPSecure::VerifyCertificate, this, _1, _2));
 			try
 			{
@@ -408,7 +409,7 @@ namespace Plugins {
 				m_bConnected = true;
 				pPlugin->MessagePlugin(new onConnectCallback(pPlugin, m_pConnection, err.value(), err.message()));
 
-				m_tLastSeen = time(0);
+				m_tLastSeen = time(nullptr);
 				m_TLSSock->async_read_some(boost::asio::buffer(m_Buffer, sizeof m_Buffer),
 					boost::bind(&CPluginTransportTCP::handleRead, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
 			}
@@ -462,7 +463,7 @@ namespace Plugins {
 		{
 			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, m_Buffer));
 
-			m_tLastSeen = time(0);
+			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
 
 			//ready for next read
@@ -502,13 +503,13 @@ namespace Plugins {
 		if (m_TLSSock)
 		{
 			delete m_TLSSock;
-			m_TLSSock = NULL;
+			m_TLSSock = nullptr;
 		}
 
 		if (m_Context)
 		{
 			delete m_Context;
-			m_Context = NULL;
+			m_Context = nullptr;
 		}
 
 	};
@@ -526,7 +527,7 @@ namespace Plugins {
 
 				m_Socket = new boost::asio::ip::udp::socket(ios, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), iPort));
 				m_Socket->set_option(boost::asio::ip::udp::socket::reuse_address(true));
-				if ((m_IP.substr(0, 4) >= "224.") && (m_IP.substr(0, 4) <= "239.") || (m_IP.substr(0, 4) == "255."))
+				if (((m_IP.substr(0, 4) >= "224.") && (m_IP.substr(0, 4) <= "239.")) || (m_IP.substr(0, 4) == "255."))
 				{
 					m_Socket->set_option(boost::asio::ip::multicast::join_group(boost::asio::ip::address::from_string(m_IP.c_str())), ec);
 					m_Socket->set_option(boost::asio::ip::multicast::hops(2), ec);
@@ -562,7 +563,8 @@ namespace Plugins {
 			std::string sAddress = m_remote_endpoint.address().to_string();
 			std::string sPort = std::to_string(m_remote_endpoint.port());
 
-			CConnection* pConnection = (CConnection*)CConnection_new(&CConnectionType, (PyObject*)NULL, (PyObject*)NULL);
+			CConnection *pConnection
+				= (CConnection *)CConnection_new(&CConnectionType, (PyObject *)nullptr, (PyObject *)nullptr);
 
 			// Configure temporary Python Connection object
 			Py_XDECREF(pConnection->Name);
@@ -582,7 +584,7 @@ namespace Plugins {
 			pConnection->pPlugin->MessagePlugin(new ProtocolDirective(pConnection->pPlugin, (PyObject*)pConnection));
 			pConnection->pPlugin->MessagePlugin(new ReadEvent(pConnection->pPlugin, (PyObject*)pConnection, bytes_transferred, m_Buffer));
 
-			m_tLastSeen = time(0);
+			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
 
 			// Make sure only the only Message objects are referring to Connection so that it is cleaned up right after plugin onMessage
@@ -630,7 +632,7 @@ namespace Plugins {
 			}
 
 			// Different handling for multi casting
-			if ((m_IP.substr(0, 4) >= "224.") && (m_IP.substr(0, 4) <= "239.") || (m_IP.substr(0, 4) == "255."))
+			if (((m_IP.substr(0, 4) >= "224.") && (m_IP.substr(0, 4) <= "239.")) || (m_IP.substr(0, 4) == "255."))
 			{
 				m_Socket->set_option(boost::asio::socket_base::broadcast(true));
 				boost::asio::ip::udp::endpoint destination(boost::asio::ip::address_v4::broadcast(), atoi(m_Port.c_str()));
@@ -661,7 +663,7 @@ namespace Plugins {
 			_log.Log(LOG_NORM, "(%s) Handling UDP disconnect, socket (%s:%s) is %sconnected", pPlugin->m_Name.c_str(), m_IP.c_str(), m_Port.c_str(), (m_bConnected ? "" : "not "));
 		}
 
-		m_tLastSeen = time(0);
+		m_tLastSeen = time(nullptr);
 		if (m_bConnected)
 		{
 			if (m_Socket)
@@ -693,11 +695,11 @@ namespace Plugins {
 		if (m_Socket)
 		{
 			delete m_Socket;
-			m_Socket = NULL;
+			m_Socket = nullptr;
 		}
 	};
 
-	void CPluginTransportICMP::handleAsyncResolve(const boost::system::error_code &ec, boost::asio::ip::icmp::resolver::iterator endpoint_iterator)
+	void CPluginTransportICMP::handleAsyncResolve(const boost::system::error_code &ec, const boost::asio::ip::icmp::resolver::iterator &endpoint_iterator)
 	{
 		if (!ec)
 		{
@@ -774,7 +776,7 @@ namespace Plugins {
 			}
 
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
-			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, 0, NULL));
+			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, 0, nullptr));
 			pPlugin->MessagePlugin(new DisconnectDirective(pPlugin, m_pConnection));
 		}
 		else if (ec != boost::asio::error::operation_aborted)  // Timer canceled by message arriving
@@ -824,7 +826,7 @@ namespace Plugins {
 
 				pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, m_Buffer, (iMsElapsed ? iMsElapsed : 1)));
 
-				m_tLastSeen = time(0);
+				m_tLastSeen = time(nullptr);
 				m_iTotalBytes += bytes_transferred;
 			}
 
@@ -901,7 +903,7 @@ namespace Plugins {
 			_log.Log(LOG_NORM, "(%s) Handling ICMP disconnect, socket (%s) is %sconnected", pPlugin->m_Name.c_str(), m_IP.c_str(), (m_bConnected ? "" : "not "));
 		}
 
-		m_tLastSeen = time(0);
+		m_tLastSeen = time(nullptr);
 		if (m_Timer)
 		{
 			m_Timer->cancel();
@@ -935,23 +937,19 @@ namespace Plugins {
 		{
 			m_Timer->cancel();
 			delete m_Timer;
-			m_Timer = NULL;
+			m_Timer = nullptr;
 		}
 
 		if (m_Socket)
 		{
 			delete m_Socket;
-			m_Socket = NULL;
+			m_Socket = nullptr;
 		}
 	}
 
 	CPluginTransportSerial::CPluginTransportSerial(int HwdID, PyObject* pConnection, const std::string & Port, int Baud) : CPluginTransport(HwdID, pConnection), m_Baud(Baud)
 	{
 		m_Port = Port;
-	}
-
-	CPluginTransportSerial::~CPluginTransportSerial(void)
-	{
 	}
 
 	bool CPluginTransportSerial::handleConnect()
@@ -967,7 +965,7 @@ namespace Plugins {
 					boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::none),
 					boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::one));
 
-				m_tLastSeen = time(0);
+				m_tLastSeen = time(nullptr);
 				m_bConnected = isOpen();
 
 				CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
@@ -1000,7 +998,7 @@ namespace Plugins {
 			CPlugin*	pPlugin = ((CConnection*)m_pConnection)->pPlugin;
 			pPlugin->MessagePlugin(new ReadEvent(pPlugin, m_pConnection, bytes_transferred, (const unsigned char*)data));
 
-			m_tLastSeen = time(0);
+			m_tLastSeen = time(nullptr);
 			m_iTotalBytes += bytes_transferred;
 		}
 		else
@@ -1011,7 +1009,7 @@ namespace Plugins {
 
 	void CPluginTransportSerial::handleWrite(const std::vector<byte>& data)
 	{
-		if (data.size())
+		if (!data.empty())
 		{
 			write((const char *)&data[0], data.size());
 		}
@@ -1019,7 +1017,7 @@ namespace Plugins {
 
 	bool CPluginTransportSerial::handleDisconnect()
 	{
-		m_tLastSeen = time(0);
+		m_tLastSeen = time(nullptr);
 		if (m_bConnected)
 		{
 			if (isOpen())
@@ -1030,5 +1028,5 @@ namespace Plugins {
 		}
 		return true;
 	}
-}
+} // namespace Plugins
 #endif
