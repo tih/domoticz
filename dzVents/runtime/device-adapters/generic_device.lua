@@ -17,7 +17,7 @@ end
 local function setStateAttribute(state, device, _states)
 	local level;
 	if (state and string.find(state, 'Set Level')) then
-		level = string.match(state, "%d+") -- extract dimming value
+		level = string.match(state, '%d+') -- extract dimming value
 		state = 'On' -- consider the device to be on
 	end
 
@@ -53,6 +53,7 @@ return {
 		adapterManager.addDummyMethod(device, 'setIcon')
 		adapterManager.addDummyMethod(device, 'setValues')
 		adapterManager.addDummyMethod(device, 'rename')
+		adapterManager.addDummyMethod(device, 'updateQuiet')
 	end,
 
 	process = function (device, data, domoticz, utils, adapterManager)
@@ -80,6 +81,12 @@ return {
 		device.isHTTPResponse = false
 		device.isSecurity = false
 
+		-- All baseTypes
+		device['changed'] = data.changed
+		device['protected'] = data.protected
+		device['description'] = data.description
+		device['lastUpdate'] = Time(data.lastUpdate)
+
 		if (data.baseType == 'device') then
 
 			local bat
@@ -88,8 +95,6 @@ return {
 			if (data.batteryLevel <= 100) then bat = data.batteryLevel end
 			if (data.signalLevel <= 100) then sig = data.signalLevel end
 
-			device['changed'] = data.changed
-			device['description'] = data.description
 			device['deviceType'] = data.deviceType
 			device['hardwareName'] = data.data.hardwareName
 			device['hardwareType'] = data.data.hardwareType
@@ -103,7 +108,6 @@ return {
 			device['batteryLevel'] = bat
 			device['signalLevel'] = sig
 			device['deviceSubType'] = data.subType
-			device['lastUpdate'] = Time(data.lastUpdate)
 			device['rawData'] = data.rawData
 			device['nValue'] = data.data._nValue
 			device['sValue'] = data.data._state or ( table.concat(device.rawData,';') ~= '' and  table.concat(device.rawData,';') ) or nil
@@ -118,28 +122,23 @@ return {
 		end
 
 		if (data.baseType == 'group' or data.baseType == 'scene') then
-			device['description'] = data.description
-			device['protected'] = data.protected
-			device['lastUpdate'] = Time(data.lastUpdate)
 			device['rawData'] = { [1] = data.data._state }
-			device['changed'] = data.changed
 			device['cancelQueuedCommands'] = function()
 				domoticz.sendCommand('Cancel', {
 					type = 'scene',
 					idx = data.id
 				})
 			end
-
 		end
 
 		setStateAttribute(data.data._state, device, _states)
 
 		function device.setDescription(description)
 			local url = domoticz.settings['Domoticz url'] ..
-				"/json.htm?description=" .. utils.urlEncode(description) ..
-				"&idx=" .. device.id ..
-				"&name=".. utils.urlEncode(device.name) ..
-				"&type=setused&used=true"
+				'/json.htm?description=' .. utils.urlEncode(description) ..
+				'&idx=' .. device.id ..
+				'&name='.. utils.urlEncode(device.name) ..
+				'&type=setused&used=true'
 			return domoticz.openURL(url)
 		end
 
@@ -156,23 +155,23 @@ return {
 
 		function device.rename(newName)
 			local url = domoticz.settings['Domoticz url'] ..
-						"/json.htm?type=command&param=renamedevice" ..
-						"&idx=" .. device.idx ..
-						"&name=" .. utils.urlEncode(newName)
+						'/json.htm?type=command&param=renamedevice' ..
+						'&idx=' .. device.idx ..
+						'&name=' .. utils.urlEncode(newName)
 			return domoticz.openURL(url)
 		end
 
 		function device.protectionOn()
 			local url = domoticz.settings['Domoticz url'] ..
-						"/json.htm?type=setused&used=true&protected=true" ..
-						"&idx=" .. device.idx
+						'/json.htm?type=setused&used=true&protected=true' ..
+						'&idx=' .. device.idx
 			return domoticz.openURL(url)
 		end
 
 		function device.protectionOff()
 			local url = domoticz.settings['Domoticz url'] ..
-						"/json.htm?type=setused&used=true&protected=false" ..
-						"&idx=" .. device.idx
+						'/json.htm?type=setused&used=true&protected=false' ..
+						'&idx=' .. device.idx
 			return domoticz.openURL(url)
 		end
 
@@ -199,6 +198,36 @@ return {
 		function device.setState(newState)
 			-- generic state update method
 			return TimedCommand(domoticz, device.name, newState, 'device', device.state)
+		end
+
+		function device.updateQuiet(nValue, sValue)
+
+			if not(nValue or sValue) then
+				utils.log('nValue and sValue cannot both be nil', utils.LOG_ERROR )
+				return
+			end
+
+			local nValue = nValue
+			local sValue = sValue
+
+			if sValue then
+				sValue = '&svalue=' .. utils.urlEncode(tostring(sValue))
+			elseif nValue and tonumber(nValue) == nil and sValue == nil then
+				sValue = '&svalue=' .. utils.urlEncode(tostring(nValue))
+				nValue = ''
+			end
+
+			if nValue and tonumber(nValue) ~= nil then
+				nValue = '&nvalue=' .. math.floor(nValue)
+			end
+
+			sValue = sValue or ''
+			nValue = nValue or ''
+
+			local url = domoticz.settings['Domoticz url'] ..
+				'/json.htm?type=command&param=udevice&idx=' .. device.id .. sValue .. nValue
+
+			return domoticz.openURL(url)
 		end
 
 		for attribute, value in pairs(data.data) do

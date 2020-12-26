@@ -65,10 +65,6 @@ CWinddelen::CWinddelen(const int ID, const std::string &IPAddress, const unsigne
 	m_winddelen_per_mill[191] = 3000.0;
 }
 
-CWinddelen::~CWinddelen(void)
-{
-}
-
 void CWinddelen::Init()
 {
 }
@@ -109,7 +105,7 @@ void CWinddelen::Do_Work()
 		sec_counter++;
 
 		if (sec_counter % 12 == 0) {
-			m_LastHeartbeat = mytime(NULL);
+			m_LastHeartbeat = mytime(nullptr);
 		}
 		if (sec_counter % WINDDELEN_POLL_INTERVAL == 0)
 		{
@@ -154,7 +150,7 @@ void CWinddelen::GetMeterDetails()
 			return;
 		}
 
-		if (root.size() < 1)
+		if (root.empty())
 		{
 			_log.Log(LOG_ERROR, "Winddelen: Invalid data received!");
 			return;
@@ -268,13 +264,13 @@ void CWinddelen::GetMeterDetails()
 
 	int fpos;
 	std::string pusage = stdstring_trim(results[7]);
-	fpos = pusage.find_first_of(" ");
+	fpos = pusage.find_first_of(' ');
 	if (fpos != std::string::npos)
 		pusage = pusage.substr(0, fpos);
 	stdreplace(pusage, ",", "");
 
 	std::string pcurrent = stdstring_trim(results[2]);
-	fpos = pcurrent.find_first_of(" ");
+	fpos = pcurrent.find_first_of(' ');
 	if (fpos != std::string::npos)
 		pcurrent = pcurrent.substr(0, fpos);
 	stdreplace(pcurrent, ",", "");

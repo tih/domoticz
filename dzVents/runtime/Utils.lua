@@ -6,8 +6,9 @@ local self = {
 	LOG_FORCE = 0.5,
 	LOG_MODULE_EXEC_INFO = 2,
 	LOG_INFO = 3,
+	LOG_WARNING = 3,
 	LOG_DEBUG = 4,
-	DZVERSION = '3.0.12',
+	DZVERSION = '3.0.19',
 }
 
 function jsonParser:unsupportedTypeEncoder(value_of_unsupported_type)
@@ -56,6 +57,33 @@ self.toStr = function (value)
 	return str
 end
 
+self.fuzzyLookup = function (search, target) -- search must be string/number, target must be string/number or array of string/numbers
+	if type(target) == 'table' then
+		local lowestFuzzyValue = math.maxinteger
+		local lowestFuzzyKey = ''
+		for _, targetString in ipairs(target) do
+			local fuzzyValue =  self.fuzzyLookup(search, targetString)
+			if  fuzzyValue < lowestFuzzyValue then
+				lowestFuzzyKey = targetString
+				lowestFuzzyValue = fuzzyValue
+			end
+		end
+		return lowestFuzzyKey
+	else
+		local search, target = (tostring(search)):lower(), (tostring(target)):lower()
+		local searchLength, targetLength, res = #search, #target, {}
+		for i = 0, searchLength do res[i] = { [0] = i } end
+		for j = 1, targetLength do res[0][j] = j end
+		for k = 1, searchLength do
+			for l = 1, targetLength do
+				local cost = search:sub(k,k) == target:sub(l,l) and 0 or 1
+				res[k][l] = math.min(res[k-1][l]+1, res[k][l-1]+1, res[k-1][l-1]+cost)
+			end
+		end
+		return res[searchLength][targetLength]
+	end
+end
+
 function self.setLogMarker(logMarker)
 	_G.logMarker = logMarker or _G.moduleLabel
 end
@@ -91,12 +119,15 @@ function self.fileExists(name)
 	return code ~= 2
 end
 
-function self.stringSplit(text, sep)
+function self.stringSplit(text, sep, convertNumber, convertNil)
 	if not(text) then return {} end
 	local sep = sep or '%s'
+	local include = '+'
+	if convertNil then include = '*' end
 	local t = {}
-	for str in string.gmatch(text, "([^"..sep.."]+)") do
-		table.insert(t, str)
+	for str in string.gmatch(text, "([^" ..sep.. "]" .. include .. ")" ) do
+		if convertNil and str == '' then str = convertNil end
+		table.insert(t, ( convertNumber and tonumber(str) ) or str)
 	end
 	return t
 end
@@ -176,6 +207,13 @@ function self.toCelsius(f, relative)
 		return f*(1/1.8)
 	end
 	return ((f-32) / 1.8)
+end
+
+function self.osCommand(cmd)
+	local file = assert ( io.popen(cmd) )
+	local output = assert ( file:read('*all') )
+	local rc = { file:close() }
+	return output, rc[3]
 end
 
 function self.osExecute(cmd)
@@ -267,7 +305,7 @@ function self.fromJSON(json, fallback)
 
 end
 
-function self.fromBase64(codedString)  -- from http://lua-users.org/wiki/BaseSixtyFour
+function self.fromBase64(codedString) -- from http://lua-users.org/wiki/BaseSixtyFour
 	if type(codedString) ~= 'string' then
 		self.log('fromBase64: parm should be a string; you supplied a ' .. type(codedString), self.LOG_ERROR)
 		return nil
@@ -314,7 +352,7 @@ function self.isXML(str, content)
 	local str = str or ''
 	local content = content or ''
 	local xmlPattern = '^%s*%<.+%>%s*$'
-	local ret = ( str:match(xmlPattern) == str  or content:find('application/xml') or content:find('text/xml')) and not(str:sub(1,30):find('DOCTYPE html') )
+	local ret = ( str:match(xmlPattern) == str or content:find('application/xml') or content:find('text/xml')) and not(str:sub(1,30):find('DOCTYPE html') )
 	return ret
 
 end
@@ -498,13 +536,15 @@ function self.cameraExists(parm)
 	return loopGlobal(parm, 'camera')
 end
 
-function self.dumpTable(t, level, filename)
+function self.dumpTable(t, level, filename, done)
 	local level = level or "> "
+	local done = done or {}
 	for attr, value in pairs(t or {}) do
-		if (type(value) ~= 'function') then
-			if (type(value) == 'table') then
+		if type(value) ~= 'function' then
+			if type(value) == 'table' and not(done[value]) then
+				done[value] = true
 				self.print(level .. attr .. ':', filename)
-				self.dumpTable(value, level .. '	', filename)
+				self.dumpTable(value, level .. '	', filename, done)
 			else
 				self.print(level .. attr .. ': ' .. tostring(value), filename)
 			end
@@ -526,7 +566,7 @@ function self.dumpSelection(object, selection)
 			self.print('')
 			self.print('> lastUpdate: ' .. (object.lastUpdate.raw or '') )
 		end
-		if object.baseType ~= 'variable'  and object.baseType ~= 'hardware' then
+		if object.baseType ~= 'variable' and object.baseType ~= 'hardware' then
 			self.print('> adapters: ' .. table.concat(object._adapters or {},', ') )
 		end
 		if object.baseType == 'device' then
@@ -579,6 +619,20 @@ function self.hsbToRGB(h, s, v)
 	b = (b1+m) * 255
 	return r, g, b
 
+end
+
+function self.humidityStatus (temperature, humidity)
+	local constants = domoticz or require('constants')
+	local temperature = tonumber(temperature)
+	local humidity = tonumber(humidity)
+
+	if humidity <= 30 then return constants.HUM_DRY
+	elseif humidity >= 70 then return constants.HUM_WET
+	elseif  humidity >= 35 and
+			humidity <= 65 and
+			temperature >= 22 and
+			temperature <= 26 then return constants.HUM_COMFORTABLE
+	else return constants.HUM_NORMAL end
 end
 
 return self

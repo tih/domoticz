@@ -24,6 +24,7 @@ License: Public domain
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <utility>
 
 #define VEHICLE_SWITCH_CHARGE 1
 #define VEHICLE_SWITCH_CLIMATE 2
@@ -79,7 +80,7 @@ CeVehicle::CeVehicle(const int ID, eVehicleType vehicletype, const std::string& 
 	m_allowwakeup = allowwakeup;
 }
 
-CeVehicle::~CeVehicle(void)
+CeVehicle::~CeVehicle()
 {
 	m_commands.clear();
 	delete m_api;
@@ -153,7 +154,7 @@ void CeVehicle::SendAlert()
 	}
 }
 
-void CeVehicle::SendAlert(int alertType, int value, std::string title)
+void CeVehicle::SendAlert(int alertType, int value, const std::string &title)
 {
 	if (alertType == VEHICLE_ALERT_STATUS)
 		SendAlertSensor(VEHICLE_ALERT_STATUS, 255, value, title, m_Name + " State");
@@ -164,17 +165,17 @@ void CeVehicle::SendAlert(int alertType, int value, std::string title)
 void CeVehicle::SendSwitch(int switchType, bool value)
 {
 	if ((switchType == VEHICLE_SWITCH_CHARGE) && m_api->m_capabilities.has_charge_command)
-		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_CHARGE, 1, 255, value, 0, m_Name + " Charge switch");
+		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_CHARGE, 1, 255, value, 0, m_Name + " Charge switch", m_Name);
 	if ((switchType == VEHICLE_SWITCH_CLIMATE) && m_api->m_capabilities.has_charge_command)
-		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_CLIMATE, 1, 255, value, 0, m_Name + " Climate switch");
+		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_CLIMATE, 1, 255, value, 0, m_Name + " Climate switch", m_Name);
 	if ((switchType == VEHICLE_SWITCH_DEFROST) && m_api->m_capabilities.has_charge_command)
-		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_DEFROST, 1, 255, value, 0, m_Name + " Defrost switch");
+		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_DEFROST, 1, 255, value, 0, m_Name + " Defrost switch", m_Name);
 }
 
 void CeVehicle::SendValueSwitch(int switchType, int value)
 {
 	if ((switchType == VEHICLE_SWITCH_MAX_CHARGE) && m_api->m_capabilities.has_charge_limit)
-		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_MAX_CHARGE, 1, 255, (value == 100), 0, m_Name + " Max charge limit switch");
+		CDomoticzHardwareBase::SendSwitch(VEHICLE_SWITCH_MAX_CHARGE, 1, 255, (value == 100), 0, m_Name + " Max charge limit switch", m_Name);
 }
 
 void CeVehicle::SendTemperature(int tempType, float value)
@@ -197,16 +198,16 @@ void CeVehicle::SendCounter(int countType, float value)
 		SendCustomSensor(VEHICLE_COUNTER_ODO, 1, 255, value, m_Name + " Odometer", m_api->m_config.distance_unit);
 }
 
-void CeVehicle::SendCustom(int countType, int ChildId, float value, std::string label)
+void CeVehicle::SendCustom(int countType, int ChildId, float value, const std::string &label)
 {
 	if ((countType == VEHICLE_CUSTOM) && m_api->m_capabilities.has_custom_data)
-		SendCustomSensor(VEHICLE_CUSTOM, ChildId, 255, value, m_Name + " " + label.c_str(), "");
+		SendCustomSensor(VEHICLE_CUSTOM, ChildId, 255, value, m_Name + " " + label, "");
 }
 
-void CeVehicle::SendText(int countType, int ChildId, std::string value, std::string label)
+void CeVehicle::SendText(int countType, int ChildId, const std::string &value, const std::string &label)
 {
 	if ((countType == VEHICLE_CUSTOM) && m_api->m_capabilities.has_custom_data)
-		SendTextSensor(VEHICLE_CUSTOM, ChildId, 255, value.c_str(), m_Name + " " + label.c_str());
+		SendTextSensor(VEHICLE_CUSTOM, ChildId, 255, value, m_Name + " " + label);
 }
 
 bool CeVehicle::ConditionalReturn(bool commandOK, eApiCommandType command)
@@ -217,7 +218,7 @@ bool CeVehicle::ConditionalReturn(bool commandOK, eApiCommandType command)
 		SendAlert();
 		return true;
 	}
-	else if(m_command_nr_tries > VEHICLE_MAXTRIES)
+	if (m_command_nr_tries > VEHICLE_MAXTRIES)
 	{
 		Init();
 		SendSwitch(VEHICLE_SWITCH_CHARGE, m_car.charging);
@@ -230,18 +231,15 @@ bool CeVehicle::ConditionalReturn(bool commandOK, eApiCommandType command)
 		SendAlert();
 		return false;
 	}
-	else
+	if (command == Wake_Up)
 	{
-		if (command == Wake_Up)
-		{
-			Log(LOG_ERROR, "Car not yet awake. Will retry.");
-			SendAlert();
-		}
-		else
-			Log(LOG_ERROR, "Timeout requesting %s. Will retry.", GetCommandString(command).c_str());
-		m_command_nr_tries++;
+		Log(LOG_ERROR, "Car not yet awake. Will retry.");
+		SendAlert();
 	}
+	else
+		Log(LOG_ERROR, "Timeout requesting %s. Will retry.", GetCommandString(command).c_str());
 
+	m_command_nr_tries++;
 	return true;
 }
 
@@ -254,13 +252,6 @@ bool CeVehicle::StartHardware()
 	RequestStart();
 
 	Init();
-
-	//Start worker thread
-	m_thread = std::make_shared<std::thread>(&CeVehicle::Do_Work, this);
-	SetThreadNameInt(m_thread->native_handle());
-	if (!m_thread)
-		return false;
-	m_bIsStarted = true;
 
 	if (m_sql.GetPreferencesVar("Location", nValue, sValue))
 		StringSplit(sValue, ";", strarray);
@@ -279,6 +270,13 @@ bool CeVehicle::StartHardware()
 
 		Log(LOG_STATUS, "Using Domoticz home location (Lat %s, Lon %s) as car's home location.", Latitude.c_str(), Longitude.c_str());
 	}
+
+	//Start worker thread
+	m_thread = std::make_shared<std::thread>(&CeVehicle::Do_Work, this);
+	SetThreadNameInt(m_thread->native_handle());
+	if (!m_thread)
+		return false;
+	m_bIsStarted = true;
 
 	sOnConnected(this);
 	return true;
@@ -337,34 +335,52 @@ void CeVehicle::Do_Work()
 	int fail_counter = 0;
 	int interval = 1000;
 	bool initial_check = true;
+	bool bIsAborted = false;
 	Log(LOG_STATUS, "Worker started...");
 
 	while (!IsStopRequested(interval))
 	{
 		interval = 1000;
 		sec_counter++;
-		time_t now = mytime(0);
+		time_t now = mytime(nullptr);
 		m_LastHeartbeat = now;
 
 		if (m_api == nullptr)
-			break;
+		{
+			Log(LOG_ERROR, "Aborting worker as there is no eVehicle provided!");
+			RequestStop();
+			continue;
+		}
 
 		// Only login if we should
-		if (!m_loggedin || (sec_counter % 68400 == 0))
+		if ((m_loggedin == false && bIsAborted == false) || (sec_counter % 68400 == 0))
 		{
 			Login();
 			if(!m_loggedin)
 			{
 				fail_counter++;
-
 				if(fail_counter > 3)
 				{
-					Log(LOG_STATUS, "Aborting due to too many failed authentication attempts (and prevent getting blocked)!");
-					break;
+					Log(LOG_ERROR, "Aborting due to too many failed authentication attempts (and prevent getting blocked)!");
+					fail_counter = 0;
+					bIsAborted = true;
+					continue;
 				}
 			}
-
-			sec_counter = 1;
+			else
+			{
+				sec_counter = 1;
+				fail_counter = 0;
+				bIsAborted = false;
+			}
+			continue;
+		}
+		if (bIsAborted)
+		{
+			if (sec_counter % 7200 == 0)
+			{
+				Log(LOG_ERROR, "Worker inactive due to inability to authenticate! Please check credentials!");
+			}
 			continue;
 		}
 
@@ -585,7 +601,7 @@ void CeVehicle::AddCommand(eApiCommandType command_type, std::string command_par
 	tApiCommand command;
 
 	command.command_type = command_type;
-	command.command_parameter = command_parameter;
+	command.command_parameter = std::move(command_parameter);
 
 	m_commands.push(command);
 }
@@ -634,7 +650,7 @@ bool CeVehicle::DoNextCommand()
 	return commandOK;
 }
 
-bool CeVehicle::DoSetCommand(tApiCommand command)
+bool CeVehicle::DoSetCommand(const tApiCommand &command)
 {
 	CVehicleApi::eCommandType api_command;
 

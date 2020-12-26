@@ -29,11 +29,6 @@ CDenkoviUSBDevices::CDenkoviUSBDevices(const int ID, const std::string& comPort,
 	Init();
 }
 
-
-CDenkoviUSBDevices::~CDenkoviUSBDevices()
-{
-}
-
 void CDenkoviUSBDevices::Init()
 {
 }
@@ -99,10 +94,10 @@ void CDenkoviUSBDevices::readCallBack(const char * data, size_t len)
 			}
 			for (uint8_t ii = 1; ii < 9; ii++) {
 				//z = (firstEight >> (8 - ii)) & 0x01;
-				SendSwitch(DAE_IO_TYPE_RELAY, ii, 255, (((firstEight >> (8 - ii)) & 0x01) != 0) ? true : false, 0, "Relay " + std::to_string(ii));
+				SendSwitch(DAE_IO_TYPE_RELAY, ii, 255, (((firstEight >> (8 - ii)) & 0x01) != 0) ? true : false, 0, "Relay " + std::to_string(ii), m_Name);
 			}
 			for (uint8_t ii = 1; ii < 9; ii++)
-				SendSwitch(DAE_IO_TYPE_RELAY, ii + 8, 255, ((secondEight >> (8 - ii) & 0x01) != 0) ? true : false, 0, "Relay " + std::to_string(8+ii));
+				SendSwitch(DAE_IO_TYPE_RELAY, ii + 8, 255, ((secondEight >> (8 - ii) & 0x01) != 0) ? true : false, 0, "Relay " + std::to_string(8 + ii), m_Name);
 		} 
 		break;
 	}
@@ -110,14 +105,14 @@ void CDenkoviUSBDevices::readCallBack(const char * data, size_t len)
 	m_readingNow = false;
 }
 
-void CDenkoviUSBDevices::OnError(const std::exception e)
+void CDenkoviUSBDevices::OnError(const std::exception &e)
 {
 	_log.Log(LOG_ERROR, "USB 16 Relays-VCP: Error: %s", e.what());
 }
 
 bool CDenkoviUSBDevices::StopHardware()
 {
-	if (m_thread != NULL)
+	if (m_thread != nullptr)
 	{
 		RequestStop();
 		m_thread->join();
@@ -138,7 +133,7 @@ void CDenkoviUSBDevices::Do_Work()
 
 	while (!IsStopRequested(100))
 	{
-		m_LastHeartbeat = mytime(NULL);
+		m_LastHeartbeat = mytime(nullptr);
 		if (msec_counter++ >= 40) {
 			msec_counter = 0;
 			if (m_readingNow == false && m_updateIo == false)

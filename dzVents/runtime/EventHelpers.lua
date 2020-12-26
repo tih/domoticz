@@ -26,13 +26,8 @@ local function EventHelpers(domoticz, mainMethod)
 			package.path
 	end
 
-	--if (_G.TESTMODE) then
-	--	-- make sure you run the tests from the tests folder !!!!
-	--	_G.scriptsFolderPath = currentPath .. 'scripts'
-	--	package.path = package.path .. ';' .. currentPath .. 'scripts/?.lua'
-	--	package.path = package.path .. ';' .. currentPath .. 'data/?.lua'
-	--	package.path = package.path .. ';' .. currentPath .. '/../?.lua'
-	--end
+	local validEventTypes = 'devices,timer,security,customEvents,system,httpResponses,scenes,groups,variables'
+	local inValidEventTypes = 'on,logging,active,data,execute'
 
 	local webRoot = globalvariables['domoticz_webroot']
 	local _url = 'http://127.0.0.1:' .. (tostring(globalvariables['domoticz_listening_port']) or "8080")
@@ -454,6 +449,19 @@ local function EventHelpers(domoticz, mainMethod)
 				utils.log('------ Finished ' .. moduleLabel , utils.LOG_MODULE_EXEC_INFO)
 			end
 
+			if (tonumber(globalvariables['dzVents_log_level']) == utils.LOG_DEBUG or TESTMODE ) then
+				local moduleSummary = globalvariables.script_path  .. 'module.log'
+				utils.log('Debug: Writing module summary to ' .. moduleSummary ,utils.LOG_FORCE)
+
+				local f = io.open(moduleSummary, 'a' )
+				f:write(
+					os.date('%x %X - ',timeStampAtStart) .. os.date('%x %X ') .. '(' ..
+					string.format('%02d', realTimeSpend) .. ' - ' .. string.format('%.4f',clockTimeSpend) ..
+					') ' .. string.format('%35s',moduleLabel) .. ' <<' .. moduleLabelInfo ..
+					( eventHandler.trigger and ( ' timer: "' .. eventHandler.trigger .. '"' ) or '') ,'\n')
+				f:close()
+			end
+
 			restoreLogging()
 		end
 	end
@@ -476,10 +484,9 @@ local function EventHelpers(domoticz, mainMethod)
 				return self.processTimeRuleFunction(_rule), 'function'
 			end
 
-			local rule = string.lower(_rule)
-
+			local rule = string.lower(tostring(_rule))
 			if (now.matchesRule(rule)) then
-				return true, rule
+				return true, _rule
 			end
 		end
 
@@ -650,15 +657,29 @@ local function EventHelpers(domoticz, mainMethod)
 			local logScript = (module.type == 'external' and 'Script ' or 'Internal script ')
 
 			for j, event in pairs(module.on) do
+				if type(j) ~= 'string' or type(event) ~= 'table' or validEventTypes:find(j) == nil then
+					if not self.scripts[i].invalidOnSection then
+						self.scripts[i].invalidOnSection = true
+						if type(j) == "string" and validEventTypes:find(j) == nil then
+							if inValidEventTypes:find(j) then
+								utils.log('You entered "' .. tostring(j) .. '" in the on = section. Probably you misplaced your curly brackets', utils.LOG_FORCE)
+							else
+								utils.log('Valid eventTypes are: ' .. validEventTypes, utils.LOG_DEBUG )
+								utils.log('You entered "' .. tostring(j) .. '" in the on = section. Maybe you meant "' .. utils.fuzzyLookup(j, utils.stringSplit(validEventTypes,',')) ..'"?', utils.LOG_FORCE)
+							end
 
-				if (not (type(j) == 'string' or type(event) == 'table')) then
-					utils.log(logScript .. module.name .. '.lua has a malformed on-section. Check the documentation. Skipping', utils.LOG_DEBUG)
+						else
+							utils.log('You entered "' .. utils.toStr(event) .. '" as trigger but the eventType is not (properly) set')
+						end
+						utils.log(logScript .. module.name .. '.lua has an invalid on = section;  please check the wiki. Skipping it until fixed.', utils.LOG_ERROR)
+					end
+
 				else
 					if (mode == 'timer' and j == 'timer') then
 						-- { ['timer'] = { 'every minute ', 'every hour' } }
 
 						if type(event) ~= 'table' then
-							utils.log(logScript .. module.name .. '.lua has a malformed timer-section. Check the documentation.', utils.LOG_FORCE)
+							utils.log(logScript .. module.name .. '.lua has a malformed timer = section. Check the documentation.', utils.LOG_FORCE)
 							event = { event }
 						end
 
@@ -690,13 +711,13 @@ local function EventHelpers(domoticz, mainMethod)
 
 						-- { ['scenes'] = { 'scA', ['scB'] = { ..timedefs }, .. }
 
-						for devIdx, scgrpName in pairs(event) do
+						for scgrpIdx, scgrpName in pairs(event) do
 
 							-- detect if scgrpName is of the form ['devB'] = { 'every hour' }
 							if (type(scgrpName) == 'table') then
 								local triggered, def = self.processTimeRules(scgrpName, testTime)
 								if (triggered) then
-									addBindingEvent(bindings, devIdx, module)
+									addBindingEvent(bindings, scgrpIdx, module)
 								end
 							else
 								-- a single scene or group name (or id)
@@ -752,7 +773,6 @@ local function EventHelpers(domoticz, mainMethod)
 				end
 			end
 		end
-
 		return bindings, self.errModules
 	end
 
@@ -820,7 +840,15 @@ local function EventHelpers(domoticz, mainMethod)
 
 		for scriptTrigger, scripts in pairs(allEventScripts) do
 
-			if (string.find(scriptTrigger, '*')) then -- a wild-card was used
+			local function strFind(str, key)
+				return string.find(str, key)
+			end
+
+			local ok, res = pcall(strFind, scriptTrigger, '*');
+			if not ok then
+				utils.log('Script name: ' .. scripts[1].name  .. '.lua, has a malformed on = section. The trigger = ' .. _.str(scriptTrigger) , utils.LOG_ERROR)
+				allEventScripts[scriptTrigger] = ''
+			elseif res then -- a wild-card was used
 				scriptTrigger = ('^' .. scriptTrigger:gsub("[%^$]","."):gsub("*", ".*") .. '$')
 
 				local function sMatch(text, match) -- specialized sanitized match function to allow combination of Lua magic chars in wildcards
@@ -1165,7 +1193,7 @@ local function EventHelpers(domoticz, mainMethod)
 
 		local customEvents = _G.notification and _G.notification.customEvents or nil
 
-		if (dcustomEvents ~= nil) then
+		if (customEvents ~= nil) then
 			for i, customEvent in pairs(customEvents) do
 				table.insert(items, '- Custom: ' .. customEvent.type) -- .. ' - ' .. customEvent.status)
 				length = length + 1
